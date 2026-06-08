@@ -26,10 +26,18 @@
   <!-- ========================================================
        TOP NAVBAR
        ======================================================== -->
+
   <nav class="top-navbar" role="navigation" aria-label="Main navigation">
     <div class="nav-left">
+      <img
+          src="favicon.png"
+          alt="Palawan State University Logo"
+          class="psu-logo"
+          width="36"
+          height="36"
+          loading="lazy"
+        />
       <span class="brand">ATLAS PSU</span>
-
       <div class="nav-menu" role="menubar">
         <div class="nav-item" role="menuitem" tabindex="0" data-panel="0">Dashboard</div>
         <div class="nav-item" role="menuitem" tabindex="0" data-panel="1">Workload Optimization</div>
@@ -114,35 +122,34 @@
         <div class="workload-grid">
           <!-- LEFT: Controls -->
           <div class="workload-controls-card">
-            <img
-              src="https://i.pinimg.com/originals/fc/24/44/fc2444b08922df34e0f14b9977fa5291.gif"
-              class="ga-image"
-              alt="Genetic Algorithm"
-            >
-            <p class="subtitle">Powered by Genetic Algorithm</p>
+          <!-- Fixed the image source to a direct .gif file link -->
+          <img src="https://cdn.dribbble.com/userupload/21115803/file/original-d31905ca435978c16c479e8fc0da3227.gif" class="ga-image" alt="Genetic Algorithm">
+          
+          <p class="subtitle">Powered by Genetic Algorithm</p>
+          
+          <button id="runGA" class="btn btn-full" aria-label="Run optimization">
+            Run Optimization
+          </button>
+          
+          <details class="advanced-settings">
+            <summary>Advanced Settings</summary>
+            <div class="settings-body">
+              <label for="populationSize">Population Size 
+                <input type="number" id="populationSize" value="20" min="5" max="200">
+              </label>
+              <label for="numGenerations">Generations 
+                <input type="number" id="numGenerations" value="50" min="10" max="1000">
+              </label>
+              <label for="mutationRate">Mutation Rate 
+                <input type="number" id="mutationRate" value="0.1" step="0.01" min="0" max="1">
+              </label>
+              <label for="crossoverRate">Crossover Rate 
+                <input type="number" id="crossoverRate" value="0.8" step="0.1" min="0" max="1">
+              </label>
+            </div>
+          </details>
+        </div>
 
-            <button id="runGA" class="btn btn-full" aria-label="Run optimization">
-              Run Optimization
-            </button>
-
-            <details class="advanced-settings">
-              <summary>Advanced Settings</summary>
-              <div class="settings-body">
-                <label for="populationSize">Population Size
-                  <input type="number" id="populationSize" value="20" min="5" max="200">
-                </label>
-                <label for="numGenerations">Generations
-                  <input type="number" id="numGenerations" value="50" min="10" max="1000">
-                </label>
-                <label for="mutationRate">Mutation Rate
-                  <input type="number" id="mutationRate" value="0.1" step="0.01" min="0" max="1">
-                </label>
-                <label for="crossoverRate">Crossover Rate
-                  <input type="number" id="crossoverRate" value="0.8" step="0.1" min="0" max="1">
-                </label>
-              </div>
-            </details>
-          </div>
 
           <!-- RIGHT: Result -->
           <div class="workload-result-card">
