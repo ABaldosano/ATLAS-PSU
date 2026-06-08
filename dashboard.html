@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATLAS PSU — Dashboard</title>
+
+  <!-- Auth guard -->
+  <script>
+    if (!sessionStorage.getItem('atlasUser')) {
+      window.location.href = 'login.html';
+    }
+  </script>
+
+  <!-- External Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+
+  <!-- App Styles & Scripts -->
+  <link rel="stylesheet" href="main-style.css">
+  <script src="main-script.js" defer></script>
+</head>
+<body>
+
+  <!-- ========================================================
+       TOP NAVBAR
+       ======================================================== -->
+  <nav class="top-navbar" role="navigation" aria-label="Main navigation">
+    <div class="nav-left">
+      <span class="brand">ATLAS PSU</span>
+
+      <div class="nav-menu" role="menubar">
+        <div class="nav-item" role="menuitem" tabindex="0" data-panel="0">Dashboard</div>
+        <div class="nav-item" role="menuitem" tabindex="0" data-panel="1">Workload Optimization</div>
+        <div class="nav-item" role="menuitem" tabindex="0" data-panel="2">Reports</div>
+        <div class="nav-item" role="menuitem" tabindex="0" data-panel="3">Faculty &amp; Subjects</div>
+        <div class="nav-item" role="menuitem" tabindex="0" data-panel="4">Settings</div>
+      </div>
+    </div>
+
+    <div class="nav-right">
+      <div class="search-box" role="search">
+        <input type="text" placeholder="Search…" aria-label="Search">
+      </div>
+
+      <div class="nav-item dropdown" aria-haspopup="true" aria-label="User menu">
+        <img
+          src="https://media.istockphoto.com/id/2171382633/vector/user-profile-icon-anonymous-person-symbol-blank-avatar-graphic-vector-illustration.jpg?s=612x612&w=0&k=20&c=ZwOF6NfOR0zhYC44xOX06ryIPAUhDvAajrPsaZ6v1-w="
+          class="profile-pic"
+          alt="User profile"
+        >
+        <div class="dropdown-content" role="menu">
+          <div role="menuitem" id="navUserLabel">Profile</div>
+          <a href="login.html" role="menuitem" onclick="sessionStorage.clear()">Logout</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ========================================================
+       PANELS WRAPPER
+       ======================================================== -->
+  <main class="panels-wrapper">
+    <div class="panels-container">
+
+      <!-- PANEL 0: DASHBOARD -->
+      <section class="panel" id="panel-dashboard" aria-label="Dashboard">
+        <div class="page-header">
+          <h2>Faculty Optimization Dashboard</h2>
+          <p>Real-time academic workload analytics and faculty distribution insights powered by genetic algorithm optimization.</p>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">Average Load</div>
+            <div class="stat-value" id="statAvgLoad">—</div>
+            <div class="stat-sub">units per faculty</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Overloaded Faculty</div>
+            <div class="stat-value" id="statOverloaded">—</div>
+            <div class="stat-sub">above 24 units</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Balance Score</div>
+            <div class="stat-value" id="statBalance">—</div>
+            <div class="stat-sub">workload equity</div>
+          </div>
+        </div>
+
+        <div class="dashboard-chart-card">
+          <h3>Faculty Load Distribution</h3>
+          <div class="chart-canvas-wrap">
+            <canvas id="dashboardChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL 1: WORKLOAD OPTIMIZATION -->
+      <section class="panel" aria-label="Workload Optimization">
+        <div class="page-header">
+          <h2>Workload Optimization Engine</h2>
+          <p>Generate balanced faculty schedules using adaptive genetic optimization with real-time progress visualization.</p>
+        </div>
+
+        <div class="workload-grid">
+          <!-- LEFT: Controls -->
+          <div class="workload-controls-card">
+            <img
+              src="https://i.pinimg.com/originals/fc/24/44/fc2444b08922df34e0f14b9977fa5291.gif"
+              class="ga-image"
+              alt="Genetic Algorithm"
+            >
+            <p class="subtitle">Powered by Genetic Algorithm</p>
+
+            <button id="runGA" class="btn btn-full" aria-label="Run optimization">
+              Run Optimization
+            </button>
+
+            <details class="advanced-settings">
+              <summary>Advanced Settings</summary>
+              <div class="settings-body">
+                <label for="populationSize">Population Size
+                  <input type="number" id="populationSize" value="20" min="5" max="200">
+                </label>
+                <label for="numGenerations">Generations
+                  <input type="number" id="numGenerations" value="50" min="10" max="1000">
+                </label>
+                <label for="mutationRate">Mutation Rate
+                  <input type="number" id="mutationRate" value="0.1" step="0.01" min="0" max="1">
+                </label>
+                <label for="crossoverRate">Crossover Rate
+                  <input type="number" id="crossoverRate" value="0.8" step="0.1" min="0" max="1">
+                </label>
+              </div>
+            </details>
+          </div>
+
+          <!-- RIGHT: Result -->
+          <div class="workload-result-card">
+            <h3>Optimization Result</h3>
+
+            <div id="gaLoading" class="ga-loading hidden" aria-live="polite">
+              <div class="loader-row">
+                <div class="loader-box">
+                  <div class="spinner" role="status" aria-label="Loading"></div>
+                  <p>Generating Schedule…</p>
+                  <p>Generation: <span id="generationCounter">0</span></p>
+                </div>
+                <div class="mini-chart-wrapper">
+                  <canvas id="miniDashChart" width="200" height="140"></canvas>
+                </div>
+              </div>
+              <div id="gaProgressContainer">
+                <div id="gaProgressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+                  <div class="fill"></div>
+                </div>
+              </div>
+            </div>
+
+            <div id="gaTableWrapper">
+              <table id="gaScheduleTable">
+                <thead>
+                  <tr>
+                    <th data-key="faculty">Faculty <span class="sort-arrow">&#9650;</span></th>
+                    <th data-key="subject">Subject <span class="sort-arrow">&#9650;</span></th>
+                    <th data-key="type">Type <span class="sort-arrow">&#9650;</span></th>
+                    <th data-key="slot">Slot <span class="sort-arrow">&#9650;</span></th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PANEL 2: REPORTS -->
+      <section class="panel" id="reportsPanel" aria-label="Faculty Analytics and Reports">
+        <div class="page-header">
+          <h2>Faculty Analytics &amp; Reports</h2>
+          <p>Visual workload distribution, scheduling metrics, and export-ready institutional summaries.</p>
+        </div>
+
+        <div class="reports-charts-grid">
+          <div class="chart-card">
+            <h3>Load Distribution (Pie)</h3>
+            <div class="chart-canvas-wrap">
+              <canvas id="reportsChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <h3>Faculty Units (Bar)</h3>
+            <div class="chart-canvas-wrap">
+              <canvas id="reportsBarChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="section-heading">Summary of Results</h3>
+        <table id="reportsSummaryTable">
+          <thead>
+            <tr>
+              <th>Faculty</th>
+              <th>Days</th>
+              <th>Total Units</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <div class="export-buttons">
+          <button id="exportPDF" class="btn">Export to PDF</button>
+          <button id="exportCSV" class="btn btn-secondary">Export to CSV</button>
+        </div>
+      </section>
+
+      <!-- PANEL 3: FACULTY & SUBJECTS -->
+      <section class="panel" aria-label="Faculty and Curriculum Management">
+        <div class="page-header">
+          <h2>Faculty &amp; Curriculum Management</h2>
+          <p>Manage faculty specializations, teaching capacities, academic subjects, and scheduling parameters. Changes are saved automatically.</p>
+        </div>
+
+        <h3 class="section-heading">Faculty Management</h3>
+        <div class="faculty-scroll-wrap">
+          <table id="facultyInputTable">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Specialization</th>
+                <th>Max Units</th>
+                <th>Availability</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button id="addFacultyRow" class="btn mt-16 mb-24">+ Add Faculty</button>
+
+        <div class="section-divider"></div>
+
+        <h3 class="section-heading">Subjects</h3>
+        <div class="faculty-scroll-wrap">
+          <table id="subjectsTable">
+            <thead>
+              <tr>
+                <th>Year</th>
+                <th>Semester</th>
+                <th>Subject Name</th>
+                <th>Type</th>
+                <th>Lec Units</th>
+                <th>Lab Units</th>
+                <th>Total</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button id="addSubjectRow" class="btn mt-16 mb-24">+ Add Subject</button>
+
+        <div id="subjectsContainer"></div>
+      </section>
+
+      <!-- PANEL 4: SETTINGS -->
+      <section class="panel" aria-label="Settings">
+        <div class="page-header">
+          <h2>Settings</h2>
+          <p>System configuration and preferences.</p>
+        </div>
+      </section>
+
+    </div><!-- /.panels-container -->
+  </main>
+
+  <script>
+    // Show department in profile label
+    window.addEventListener('DOMContentLoaded', () => {
+      const deptMap = { IT:'IT Dept', CS:'CS Dept', MB:'Marine Bio', ES:'Env. Science', MedB:'Med Biology' };
+      const dept = sessionStorage.getItem('atlasDept');
+      const user = sessionStorage.getItem('atlasUser');
+      const lbl  = document.getElementById('navUserLabel');
+      if (lbl && user) lbl.textContent = user + (dept ? ' · ' + (deptMap[dept] || dept) : '');
+
+      // Profile dropdown — click to open/close
+      const profileDrop = document.querySelector('.nav-item.dropdown');
+      if (profileDrop) {
+        profileDrop.addEventListener('click', e => {
+          e.stopPropagation();
+          profileDrop.classList.toggle('open');
+        });
+        document.addEventListener('click', () => {
+          profileDrop.classList.remove('open');
+        });
+      }
+    });
+  </script>
+
+</body>
+</html>

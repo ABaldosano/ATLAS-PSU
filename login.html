@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATLAS PSU — Login</title>
+  <link rel="stylesheet" href="main-style.css">
+</head>
+<body class="page-login">
+
+  <div class="login-card">
+    <div class="brand-top">ATLAS PSU</div>
+    <h1>Sign In</h1>
+    <p class="subtitle">Automated Teaching Load Assignment System</p>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <label for="department">Department</label>
+    <div class="select-wrap">
+      <select id="department">
+        <option value="" disabled selected>Select your department</option>
+        <option value="IT">Information Technology</option>
+        <option value="CS">Computer Science</option>
+        <option value="MB">Marine Biology</option>
+        <option value="ES">Environmental Science</option>
+        <option value="MedB">Medical Biology</option>
+      </select>
+    </div>
+
+    <label for="username">Username</label>
+    <input type="text" id="username" placeholder="Enter username" autocomplete="username">
+
+    <label for="password">Password</label>
+    <input type="password" id="password" placeholder="Enter password" autocomplete="current-password">
+
+    <button class="btn-login-submit" id="loginBtn">Login</button>
+
+    <div class="login-footer-text">
+      Don't have an account? <a href="#">Contact Admin</a>
+      &nbsp;·&nbsp;
+      <a href="index.html">← Back</a>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('loginBtn').addEventListener('click', () => {
+      const dept = document.getElementById('department').value;
+      const user = document.getElementById('username').value.trim();
+      const pass = document.getElementById('password').value;
+      const err  = document.getElementById('errorMsg');
+
+      if (!dept) {
+        err.textContent = 'Please select your department.';
+        err.classList.add('show');
+        return;
+      }
+      if (!user || !pass) {
+        err.textContent = 'Please enter your username and password.';
+        err.classList.add('show');
+        return;
+      }
+
+      sessionStorage.setItem('atlasDept', dept);
+      sessionStorage.setItem('atlasUser', user);
+      err.classList.remove('show');
+      window.location.href = 'dashboard.html';
+    });
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('loginBtn').click();
+    });
+  </script>
+
+</body>
+</html>
