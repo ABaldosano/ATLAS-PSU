@@ -1484,3 +1484,80 @@ body.page-login {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+/* ── FAIRNESS REPORT ── */
+.fairness-report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.fairness-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  padding: 18px 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fairness-score-card {
+  border-left: 4px solid #4f46e5;
+}
+.fairness-card-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #6b7280);
+}
+.fairness-card-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--text, #111827);
+  line-height: 1.1;
+}
+.fairness-card-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted, #9ca3af);
+}
+.fairness-score-good  { color: #16a34a; }
+.fairness-score-ok    { color: #d97706; }
+.fairness-score-poor  { color: #dc2626; }
+
+/* per-faculty match table */
+.fairness-per-faculty-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+  margin-top: 4px;
+}
+.fairness-per-faculty-table th {
+  text-align: left;
+  padding: 6px 10px;
+  background: var(--bg-subtle, #f9fafb);
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  font-weight: 600;
+  color: var(--text-muted, #6b7280);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.fairness-per-faculty-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border, #f3f4f6);
+}
+.match-yes { color: #16a34a; font-weight: 600; }
+.match-partial { color: #d97706; font-weight: 600; }
+.match-no  { color: #dc2626; font-weight: 600; }
+
+/* ── CHED constraint note ── */
+.ched-note {
+  font-size: 0.75rem;
+  color: var(--text-muted, #6b7280);
+  background: var(--bg-subtle, #f0f4ff);
+  border-left: 3px solid #4f46e5;
+  border-radius: 4px;
+  padding: 7px 10px;
+  margin-top: 12px;
+  line-height: 1.5;
+}

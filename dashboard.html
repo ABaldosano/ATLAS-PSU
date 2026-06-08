@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/png" href="favicon.png">
-  <title>ATLAS PSU — Dashboard</title>
+  <title>Dashboard</title>
 
   <!-- Auth guard -->
   <script>
@@ -84,17 +84,17 @@
         <div class="stats-row">
           <div class="stat-card">
             <div class="stat-label">Average Load</div>
-            <div class="stat-value" id="statAvgLoad">—</div>
+            <div class="stat-value" id="statAvgLoad">-</div>
             <div class="stat-sub">units per faculty</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Overloaded Faculty</div>
-            <div class="stat-value" id="statOverloaded">—</div>
+            <div class="stat-value" id="statOverloaded">-</div>
             <div class="stat-sub">above 24 units</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Balance Score</div>
-            <div class="stat-value" id="statBalance">—</div>
+            <div class="stat-value" id="statBalance">-</div>
             <div class="stat-sub">workload equity</div>
           </div>
         </div>
@@ -148,6 +148,7 @@
               <label for="crossoverRate">Crossover Rate 
                 <input type="number" id="crossoverRate" value="0.8" step="0.1" min="0" max="1">
               </label>
+              <p class="ched-note">&#9432; Load limits enforced: standard max <strong>24 units</strong>, overload cap <strong>30 units</strong> - per CHED guidelines (CMO No. 40, s. 2006).</p>
             </div>
           </details>
         </div>
@@ -220,6 +221,32 @@
             <p class="empty-state-msg">Run the optimization to see the schedule timetable.</p>
           </div>
         </div>
+
+        <!-- ── FAIRNESS REPORT ── -->
+        <h3 class="section-heading">Fairness Report</h3>
+        <div id="fairnessReport" class="fairness-report-grid">
+          <div class="fairness-card fairness-score-card">
+            <div class="fairness-card-label">Fairness Score</div>
+            <div class="fairness-card-value" id="fairnessScore">-</div>
+            <div class="fairness-card-sub" id="fairnessScoreLabel">Run optimization to compute</div>
+          </div>
+          <div class="fairness-card">
+            <div class="fairness-card-label">Jain's Fairness Index</div>
+            <div class="fairness-card-value" id="fairnessJain">-</div>
+            <div class="fairness-card-sub">1.00 = perfectly equal load</div>
+          </div>
+          <div class="fairness-card">
+            <div class="fairness-card-label">Load Std. Deviation</div>
+            <div class="fairness-card-value" id="fairnessStdDev">-</div>
+            <div class="fairness-card-sub">units - lower is more balanced</div>
+          </div>
+          <div class="fairness-card">
+            <div class="fairness-card-label">Specialization Match Rate</div>
+            <div class="fairness-card-value" id="fairnessMatchRate">-</div>
+            <div class="fairness-card-sub">% of assignments matching faculty spec</div>
+          </div>
+        </div>
+        <div id="fairnessPerFaculty" style="margin-bottom:28px;"></div>
 
         <h3 class="section-heading">Summary of Results</h3>
         <table id="reportsSummaryTable">
@@ -320,7 +347,7 @@
             <input type="number" id="editMaxUnits" min="0" max="50" placeholder="e.g. 30">
             <span class="modal-input-suffix">units</span>
           </div>
-          <p class="modal-hint">Hard cap for GA assignment. Standard max is 24; overload limit is 30.</p>
+          <p class="modal-hint">Hard cap for GA assignment. Standard max is 24 units; overload limit is 30 units - <em>per CHED guidelines (CMO No. 40, s. 2006)</em>.</p>
         </div>
         <div class="modal-info-strip">
           <span class="modal-info-dot"></span>
@@ -346,7 +373,7 @@
       const lbl  = document.getElementById('navUserLabel');
       if (lbl && user) lbl.textContent = user + (dept ? ' · ' + (deptMap[dept] || dept) : '');
 
-      // Profile dropdown — click to open/close
+      // Profile dropdown - click to open/close
       const profileDrop = document.querySelector('.nav-item.dropdown');
       if (profileDrop) {
         profileDrop.addEventListener('click', e => {

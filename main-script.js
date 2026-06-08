@@ -368,6 +368,120 @@ function updateMiniFromServer(data) {
 /* ============================================================
    6. REPORTS PANEL UPDATE
    ============================================================ */
+/* ── FAIRNESS REPORT ───────────────────────────────────────────── */
+// Subject-type → broad spec keywords for match heuristic
+const TYPE_SPEC_KEYWORDS = {
+  Software:   ['software','programming','application','emerging','integration','web','multimedia','embedded','hci','human-computer','graphics','visual','algorithms','data structures','gis','geographic'],
+  Database:   ['database','information systems','information management'],
+  Networking: ['network','cybersecurity','information assurance'],
+  Elective:   [] // electives match any
+};
+
+function specMatchesType(specList, subjectType) {
+  if (!subjectType || subjectType === 'Elective') return true;
+  const keywords = TYPE_SPEC_KEYWORDS[subjectType] || [];
+  if (!keywords.length) return true;
+  return specList.some(sp =>
+    keywords.some(kw => sp.toLowerCase().includes(kw))
+  );
+}
+
+function computeFairnessReport(data) {
+  if (!data || !data.length) return;
+
+  // Build per-faculty load map
+  const loadMap = {};
+  data.forEach(item => {
+    if (!item.faculty) return;
+    loadMap[item.faculty] = (loadMap[item.faculty] || 0) + 2; // each item = 2 units
+  });
+
+  const loads = Object.values(loadMap);
+  const n = loads.length;
+  if (!n) return;
+
+  // Std deviation
+  const mean = loads.reduce((a, b) => a + b, 0) / n;
+  const variance = loads.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
+  const stdDev = Math.sqrt(variance);
+
+  // Jain's Fairness Index: (Σx)² / (n · Σx²)
+  const sumX  = loads.reduce((a, b) => a + b, 0);
+  const sumX2 = loads.reduce((a, b) => a + b * b, 0);
+  const jain  = sumX2 === 0 ? 1 : (sumX * sumX) / (n * sumX2);
+
+  // Specialization match rate - use faculty data from table
+  const facultyList = getFacultyFromTable();
+  const specMap = {};
+  facultyList.forEach(f => { specMap[f.name] = f.specialization || []; });
+
+  // Get subject type from GA result items (item may carry .type from expanded subjects)
+  let totalAssignments = 0;
+  let matchedAssignments = 0;
+  const perFaculty = {}; // name → {total, matched}
+
+  data.forEach(item => {
+    if (!item.faculty) return;
+    if (!perFaculty[item.faculty]) perFaculty[item.faculty] = { total: 0, matched: 0, load: loadMap[item.faculty] };
+    perFaculty[item.faculty].total++;
+    totalAssignments++;
+    const specs = specMap[item.faculty] || [];
+    // item.type may be present if GA returns it; otherwise infer from subject name heuristic
+    const subType = item.type || guessSubjectType(item.subject);
+    if (specMatchesType(specs, subType)) {
+      matchedAssignments++;
+      perFaculty[item.faculty].matched++;
+    }
+  });
+
+  const matchRate = totalAssignments > 0 ? (matchedAssignments / totalAssignments) * 100 : 0;
+
+  // Overall fairness score: average of jain & normalised match rate
+  const fairnessScore = ((jain + matchRate / 100) / 2 * 100).toFixed(1);
+  const scoreClass = fairnessScore >= 80 ? 'fairness-score-good' : fairnessScore >= 60 ? 'fairness-score-ok' : 'fairness-score-poor';
+  const scoreLabel = fairnessScore >= 80 ? 'Good - load well distributed' : fairnessScore >= 60 ? 'Moderate - minor imbalances' : 'Poor - significant imbalances';
+
+  // Update summary cards
+  const el = id => document.getElementById(id);
+  el('fairnessScore').textContent = fairnessScore + '%';
+  el('fairnessScore').className = 'fairness-card-value ' + scoreClass;
+  el('fairnessScoreLabel').textContent = scoreLabel;
+  el('fairnessJain').textContent = jain.toFixed(4);
+  el('fairnessStdDev').textContent = stdDev.toFixed(2) + ' u';
+  el('fairnessMatchRate').textContent = matchRate.toFixed(1) + '%';
+
+  // Per-faculty table
+  const container = document.getElementById('fairnessPerFaculty');
+  if (!container) return;
+  const rows = Object.keys(perFaculty).sort().map(name => {
+    const d = perFaculty[name];
+    const pct = d.total ? Math.round((d.matched / d.total) * 100) : 0;
+    const cls = pct === 100 ? 'match-yes' : pct >= 50 ? 'match-partial' : 'match-no';
+    const loadCls = d.load > MAX_UNITS ? 'units-over' : d.load === MAX_UNITS ? 'units-max' : 'units-ok';
+    return `<tr>
+      <td>${escapeHTML(name)}</td>
+      <td><span class="units-badge ${loadCls}">${d.load}</span></td>
+      <td>${d.total}</td>
+      <td class="${cls}">${pct}%</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <table class="fairness-per-faculty-table">
+      <thead><tr>
+        <th>Faculty</th><th>Load (units)</th><th>Assignments</th><th>Spec Match</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function guessSubjectType(subjectName) {
+  const n = (subjectName || '').toLowerCase();
+  if (/network|cisco/.test(n)) return 'Networking';
+  if (/database|information management|data science/.test(n)) return 'Database';
+  return 'Software';
+}
+
 function updateReportsPanel(data) {
   if (!data || !data.length) return;
 
@@ -427,6 +541,8 @@ function updateReportsPanel(data) {
   tbody.querySelectorAll('.btn-edit-faculty').forEach(btn => {
     btn.addEventListener('click', () => openEditModal(btn.dataset.faculty));
   });
+
+  computeFairnessReport(data);
 }
 
 /* ============================================================
@@ -811,7 +927,7 @@ function initFacultyManagement() {
     }
   });
 
-  // Reposition on scroll/resize — keeps fixed dropdown aligned with button
+  // Reposition on scroll/resize - keeps fixed dropdown aligned with button
   const reposition = () => {
     document.querySelectorAll('.multi-select-dropdown.open').forEach(d => {
       const btn = d.querySelector('.dropdown-btn');
@@ -1164,30 +1280,457 @@ function initExports() {
   }
 
   if (pdfBtn) {
-    pdfBtn.addEventListener('click', () => {
-      if (!window.jspdf) { alert('jsPDF not loaded.'); return; }
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
-      const table = document.getElementById('reportsSummaryTable');
-      if (!table) return;
-
-      let y = 16;
-      doc.setFontSize(14);
-      doc.text('ATLAS PSU - Faculty Load Summary', 14, y);
-      y += 10;
-      doc.setFontSize(10);
-
-      Array.from(table.rows).forEach(row => {
-        Array.from(row.cells).forEach((cell, j) => {
-          doc.text(cell.innerText, 14 + j * 60, y);
-        });
-        y += 8;
-        if (y > 280) { doc.addPage(); y = 16; }
-      });
-
-      doc.save('atlas_psu_reports.pdf');
-    });
+    pdfBtn.addEventListener('click', generatePrintReport);
   }
+}
+
+function generatePrintReport() {
+  if (!lastGAResult || !lastGAResult.length) {
+    alert('Run the optimization first to generate a report.');
+    return;
+  }
+
+  const dept     = sessionStorage.getItem('atlasDept') || 'IT';
+  const user     = sessionStorage.getItem('atlasUser') || 'Administrator';
+  const deptMap  = { IT:'Information Technology', CS:'Computer Science', MB:'Marine Biology', ES:'Environmental Science', MedB:'Medical Biology' };
+  const deptFull = deptMap[dept] || dept;
+  const now      = new Date();
+  const dateStr  = now.toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
+  const timeStr  = now.toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' });
+
+  // ── Build faculty load data ──────────────────────────────────
+  const byFaculty = {};
+  lastGAResult.forEach(item => {
+    if (!item.faculty) return;
+    if (!byFaculty[item.faculty]) byFaculty[item.faculty] = [];
+    byFaculty[item.faculty].push(item);
+  });
+
+  // ── Fairness metrics (re-compute inline) ────────────────────
+  const loadMap = {};
+  lastGAResult.forEach(i => { if (i.faculty) loadMap[i.faculty] = (loadMap[i.faculty]||0)+2; });
+  const loads = Object.values(loadMap);
+  const n = loads.length || 1;
+  const mean = loads.reduce((a,b)=>a+b,0)/n;
+  const stdDev = Math.sqrt(loads.reduce((s,v)=>s+(v-mean)**2,0)/n);
+  const sumX = loads.reduce((a,b)=>a+b,0);
+  const sumX2 = loads.reduce((a,b)=>a+b*b,0);
+  const jain = sumX2===0 ? 1 : (sumX*sumX)/(n*sumX2);
+
+  // ── Status badge helper ──────────────────────────────────────
+  function loadBadge(units) {
+    if (units > MAX_UNITS) return `<span class="badge badge-over">${units} units (OVERLOAD)</span>`;
+    if (units === MAX_UNITS) return `<span class="badge badge-max">${units} units (MAX)</span>`;
+    return `<span class="badge badge-ok">${units} units</span>`;
+  }
+
+  // ── Faculty table rows ───────────────────────────────────────
+  let facultyRows = '';
+  let rowNum = 1;
+  Object.keys(byFaculty).sort().forEach(name => {
+    const items = byFaculty[name];
+    const total = items.length * 2;
+    const overload = total > MAX_UNITS;
+    const atMax    = total === MAX_UNITS;
+
+    items.forEach((item, idx) => {
+      const day  = item.slot.split(':')[0].trim();
+      const bgRow = rowNum % 2 === 0 ? 'style="background:#f8faff"' : '';
+      if (idx === 0) {
+        facultyRows += `
+        <tr ${bgRow}>
+          <td rowspan="${items.length}" class="faculty-cell ${overload?'cell-over':atMax?'cell-max':''}">
+            <div class="faculty-avatar-print">${escapeHTML(name.charAt(0))}</div>
+            <strong>${escapeHTML(name)}</strong>
+          </td>
+          <td><span class="subj">${escapeHTML(item.subject)}</span><span class="slot-tag slot-${escapeHTML(day)}">${escapeHTML(item.slot)}</span></td>
+          <td rowspan="${items.length}" class="units-cell">${loadBadge(total)}</td>
+        </tr>`;
+      } else {
+        facultyRows += `<tr ${bgRow}><td><span class="subj">${escapeHTML(item.subject)}</span><span class="slot-tag slot-${escapeHTML(day)}">${escapeHTML(item.slot)}</span></td></tr>`;
+      }
+      if (idx === items.length - 1) rowNum++;
+    });
+  });
+
+  const jainColor = jain >= 0.9 ? '#16a34a' : jain >= 0.75 ? '#d97706' : '#dc2626';
+  const sdColor   = stdDev <= 4  ? '#16a34a' : stdDev <= 8  ? '#d97706' : '#dc2626';
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ATLAS PSU | Faculty Load Report</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', Arial, sans-serif;
+    font-size: 10.5pt;
+    color: #1e293b;
+    background: #fff;
+    line-height: 1.5;
+  }
+
+  /* ── COVER PAGE ── */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 60px 48px;
+    background: linear-gradient(145deg, #1a0a04 0%, #6b2106 55%, #c0440a 100%);
+    color: #fff;
+    page-break-after: always;
+  }
+  .cover-logo {
+    width: 72px; height: 72px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; font-weight: 800;
+    margin: 0 auto 28px;
+    letter-spacing: -1px;
+    border: 2px solid rgba(255,255,255,0.25);
+  }
+  .cover h1 { font-size: 28pt; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 10px; }
+  .cover .subtitle { font-size: 13pt; opacity: 0.75; margin-bottom: 40px; font-weight: 400; }
+  .cover-meta {
+    display: flex; gap: 32px; justify-content: center; flex-wrap: wrap;
+    border-top: 1px solid rgba(255,255,255,0.2);
+    padding-top: 28px; margin-top: 8px;
+  }
+  .cover-meta-item { display: flex; flex-direction: column; gap: 4px; }
+  .cover-meta-label { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.55; }
+  .cover-meta-value { font-size: 11pt; font-weight: 600; }
+  .cover-badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 999px;
+    padding: 4px 16px;
+    font-size: 9pt;
+    letter-spacing: 0.05em;
+    margin-bottom: 32px;
+    font-weight: 500;
+  }
+
+  /* ── PAGE WRAPPER ── */
+  .page { padding: 44px 52px; }
+  .page-break { page-break-before: always; }
+
+  /* ── SECTION HEADER ── */
+  .section-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #e2e8f0;
+  }
+  .section-icon {
+    width: 36px; height: 36px; border-radius: 9px;
+    background: #c0440a; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; flex-shrink: 0;
+  }
+  .section-title { font-size: 14pt; font-weight: 700; color: #1a0a04; }
+  .section-sub   { font-size: 9pt; color: #64748b; margin-top: 1px; }
+
+  /* ── METRICS GRID ── */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+  .metric-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px 12px;
+    background: #f8fafc;
+  }
+  .metric-card.accent { border-left: 3px solid #c0440a; background: #fde8d8; }
+  .metric-label { font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; font-weight: 600; margin-bottom: 4px; }
+  .metric-value { font-size: 19pt; font-weight: 700; color: #1a0a04; line-height: 1; }
+  .metric-sub   { font-size: 8pt; color: #94a3b8; margin-top: 4px; }
+
+  /* ── FAIRNESS SECTION ── */
+  .fairness-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+  .fairness-item {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    background: #f8fafc;
+  }
+  .fairness-item .f-label { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.07em; color: #64748b; font-weight: 600; }
+  .fairness-item .f-value { font-size: 22pt; font-weight: 700; margin: 4px 0 2px; line-height: 1; }
+  .fairness-item .f-sub   { font-size: 8pt; color: #94a3b8; }
+
+  /* ── FACULTY TABLE ── */
+  .report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+    margin-bottom: 24px;
+  }
+  .report-table thead tr {
+    background: #1a0a04;
+    color: #fff;
+  }
+  .report-table th {
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-weight: 600;
+  }
+  .report-table td {
+    padding: 9px 12px;
+    vertical-align: top;
+    border-bottom: 1px solid #e9edf3;
+  }
+  .faculty-cell {
+    vertical-align: middle;
+    font-weight: 500;
+    width: 22%;
+    border-right: 1px solid #e9edf3;
+  }
+  .faculty-cell.cell-over { border-left: 3px solid #dc2626; }
+  .faculty-cell.cell-max  { border-left: 3px solid #d97706; }
+  .faculty-avatar-print {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: #c0440a;
+    color: #fff;
+    font-size: 11pt;
+    font-weight: 700;
+    margin-right: 8px;
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+  .units-cell { text-align: center; vertical-align: middle; width: 22%; }
+  .subj { display: inline; font-weight: 500; }
+  .slot-tag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 7.5pt;
+    font-weight: 600;
+    background: #e2e8f0;
+    color: #475569;
+    white-space: nowrap;
+  }
+  .slot-Mon,.slot-Tue,.slot-Wed { background:#fde8d8; color:#963309; }
+  .slot-Thu,.slot-Fri          { background:#d1fae5; color:#065f46; }
+  .slot-Sat                    { background:#ede9fe; color:#5b21b6; }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 8pt;
+    font-weight: 600;
+  }
+  .badge-ok   { background:#dcfce7; color:#15803d; }
+  .badge-max  { background:#fef3c7; color:#b45309; }
+  .badge-over { background:#fee2e2; color:#b91c1c; }
+
+  /* ── FOOTER ── */
+  .report-footer {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    font-size: 8pt;
+    color: #94a3b8;
+  }
+  .sig-line {
+    width: 200px;
+    border-bottom: 1px solid #475569;
+    margin-bottom: 4px;
+    height: 32px;
+  }
+  .sig-label { font-size: 8pt; color: #64748b; font-weight: 500; }
+
+  /* ── CHED note ── */
+  .ched-note-print {
+    background: #fde8d8;
+    border-left: 3px solid #c0440a;
+    border-radius: 5px;
+    padding: 8px 12px;
+    font-size: 8.5pt;
+    color: #6b2106;
+    margin-bottom: 24px;
+  }
+
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ COVER PAGE ══════════════ -->
+<div class="cover">
+  <div class="cover-logo">A</div>
+  <div class="cover-badge">Automated Teaching Load Assignment System</div>
+  <h1>Faculty Load Report</h1>
+  <p class="subtitle">Palawan State University, ${escapeHTML(deptFull)} Department</p>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Generated</span>
+      <span class="cover-meta-value">${dateStr}</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Time</span>
+      <span class="cover-meta-value">${timeStr}</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Prepared by</span>
+      <span class="cover-meta-value">${escapeHTML(user)}</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Faculty Count</span>
+      <span class="cover-meta-value">${Object.keys(byFaculty).length}</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Total Assignments</span>
+      <span class="cover-meta-value">${lastGAResult.length}</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE 2: SUMMARY + FAIRNESS ══════════════ -->
+<div class="page page-break">
+
+  <!-- Summary metrics -->
+  <div class="section-header">
+    <div class="section-icon">📊</div>
+    <div>
+      <div class="section-title">Workload Summary</div>
+      <div class="section-sub">Aggregate load statistics across all faculty members</div>
+    </div>
+  </div>
+
+  <div class="metrics-grid">
+    <div class="metric-card accent">
+      <div class="metric-label">Total Faculty</div>
+      <div class="metric-value">${Object.keys(byFaculty).length}</div>
+      <div class="metric-sub">assigned this period</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Total Assignments</div>
+      <div class="metric-value">${lastGAResult.length}</div>
+      <div class="metric-sub">subject-slot pairs</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Avg Load / Faculty</div>
+      <div class="metric-value">${mean.toFixed(1)}</div>
+      <div class="metric-sub">units</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Overloaded Faculty</div>
+      <div class="metric-value" style="color:${loads.filter(v=>v>MAX_UNITS).length>0?'#dc2626':'#16a34a'}">${loads.filter(v=>v>MAX_UNITS).length}</div>
+      <div class="metric-sub">above ${MAX_UNITS} units</div>
+    </div>
+  </div>
+
+  <!-- Fairness metrics -->
+  <div class="section-header">
+    <div class="section-icon">⚖</div>
+    <div>
+      <div class="section-title">Fairness Analysis</div>
+      <div class="section-sub">Computed via Jain's Fairness Index and load distribution metrics</div>
+    </div>
+  </div>
+
+  <div class="fairness-grid">
+    <div class="fairness-item">
+      <div class="f-label">Jain's Fairness Index</div>
+      <div class="f-value" style="color:${jainColor}">${jain.toFixed(4)}</div>
+      <div class="f-sub">1.0000 = perfectly equal load distribution</div>
+    </div>
+    <div class="fairness-item">
+      <div class="f-label">Load Std. Deviation</div>
+      <div class="f-value" style="color:${sdColor}">${stdDev.toFixed(2)}</div>
+      <div class="f-sub">units; lower indicates more balanced assignments</div>
+    </div>
+    <div class="fairness-item">
+      <div class="f-label">Overall Fairness Score</div>
+      <div class="f-value" style="color:${jain>=0.85?'#16a34a':jain>=0.7?'#d97706':'#dc2626'}">${(jain*100).toFixed(1)}%</div>
+      <div class="f-sub">${jain>=0.85?'Good: load is well balanced':jain>=0.7?'Moderate: some variance detected':'Poor: significant imbalance found'}</div>
+    </div>
+  </div>
+
+  <div class="ched-note-print">
+    ℹ &nbsp;<strong>CHED Compliance:</strong> Standard teaching load is capped at <strong>24 units</strong>; overload maximum is <strong>30 units</strong>, per CHED Memorandum Order No. 40, s. 2006. Assignments highlighted in red exceed the standard load.
+  </div>
+
+</div>
+
+<!-- ══════════════ PAGE 3+: FACULTY ASSIGNMENTS ══════════════ -->
+<div class="page page-break">
+
+  <div class="section-header">
+    <div class="section-icon">👤</div>
+    <div>
+      <div class="section-title">Faculty Assignment Details</div>
+      <div class="section-sub">Complete subject and time-slot assignments per faculty member</div>
+    </div>
+  </div>
+
+  <table class="report-table">
+    <thead>
+      <tr>
+        <th>Faculty Member</th>
+        <th>Assigned Subjects &amp; Time Slots</th>
+        <th style="text-align:center">Total Load</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${facultyRows}
+    </tbody>
+  </table>
+
+  <div class="report-footer">
+    <div>
+      <div style="font-weight:600;color:#1a0a04;margin-bottom:4px;">ATLAS PSU | Automated Teaching Load Assignment System</div>
+      <div>Generated ${dateStr} at ${timeStr} | ${escapeHTML(deptFull)} Department | Palawan State University</div>
+      <div style="margin-top:6px;color:#cbd5e1;">Optimized using Genetic Algorithm | Load limits per CHED CMO No. 40, s. 2006</div>
+    </div>
+    <div style="text-align:right">
+      <div class="sig-line"></div>
+      <div class="sig-label">Department Chairperson Signature</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  window.onload = () => { window.print(); };
+<\/script>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) { alert('Please allow pop-ups to generate the PDF report.'); return; }
+  win.document.write(html);
+  win.document.close();
 }
 
 function downloadFile(content, filename, mimeType) {
