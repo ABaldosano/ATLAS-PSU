@@ -371,28 +371,61 @@ function updateMiniFromServer(data) {
 function updateReportsPanel(data) {
   if (!data || !data.length) return;
 
-  const counts = {};
-  const daysPerProf = {};
-
+  // Group by faculty
+  const byFaculty = {};
   data.forEach(item => {
-    counts[item.faculty] = (counts[item.faculty] || 0) + 2;
-    if (!daysPerProf[item.faculty]) daysPerProf[item.faculty] = {};
-    const day = item.slot.split(':')[0].trim();
-    daysPerProf[item.faculty][day] = (daysPerProf[item.faculty][day] || 0) + 1;
+    if (!item.faculty) return;
+    if (!byFaculty[item.faculty]) byFaculty[item.faculty] = [];
+    byFaculty[item.faculty].push(item);
   });
 
   const tbody = document.querySelector('#reportsSummaryTable tbody');
   if (!tbody) return;
-
   tbody.innerHTML = '';
-  Object.keys(counts).forEach(faculty => {
-    const profDays = Object.entries(daysPerProf[faculty])
-      .map(([day, units]) => `${day}: ${units}u`)
-      .join(', ');
 
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHTML(faculty)}</td><td>${escapeHTML(profDays)}</td><td>${counts[faculty]}</td>`;
-    tbody.appendChild(tr);
+  Object.keys(byFaculty).sort().forEach(faculty => {
+    const assignments = byFaculty[faculty];
+    const totalUnits = assignments.length * 2;
+
+    assignments.forEach((item, idx) => {
+      const day = item.slot.split(':')[0].trim();
+      const tr = document.createElement('tr');
+      tr.className = 'summary-row';
+
+      const subjectSlotHTML = `
+        <td class="subject-slot-cell">
+          <span class="subj-name-text">${escapeHTML(item.subject)}</span>
+          <span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(item.slot)}</span>
+        </td>
+      `;
+
+      if (idx === 0) {
+        tr.innerHTML = `
+          <td class="faculty-name-cell" rowspan="${assignments.length}">
+            <div class="faculty-name-inner">
+              <span class="faculty-avatar">${escapeHTML(faculty.charAt(0))}</span>
+              <span>${escapeHTML(faculty)}</span>
+            </div>
+          </td>
+          ${subjectSlotHTML}
+          <td class="total-units-cell" rowspan="${assignments.length}">
+            <span class="units-badge ${totalUnits > MAX_UNITS ? 'units-over' : totalUnits === MAX_UNITS ? 'units-max' : 'units-ok'}">${totalUnits}</span>
+          </td>
+          <td class="actions-cell" rowspan="${assignments.length}">
+            <button class="btn-edit-faculty" data-faculty="${escapeAttr(faculty)}">&#9998; Edit</button>
+          </td>
+        `;
+      } else {
+        tr.innerHTML = subjectSlotHTML;
+      }
+
+      tbody.appendChild(tr);
+    });
+  });
+
+  // Bind edit buttons
+  tbody.querySelectorAll('.btn-edit-faculty').forEach(btn => {
+    btn.addEventListener('click', () => openEditModal(btn.dataset.faculty));
   });
 }
 
@@ -589,6 +622,8 @@ function initRunGA() {
             renderGASchedule(data.result);
             updateCharts(data.result);
             updateReportsPanel(data.result);
+            renderTimetable(data.result);
+            renderFacultySubjectsSummary(data.result);
           }
         }
       } catch (err) {
@@ -677,7 +712,7 @@ function addFacultyRow(facultyData = null) {
         </div>
       </div>
     </td>
-    <td><input type="number" value="${maxUnits}" readonly></td>
+    <td><input type="number" value="${maxUnits}" min="0" max="50"></td>
     <td><div class="avail-checkboxes">${daysHTML}</div></td>
     <td><button type="button" class="btn-remove btn">Remove</button></td>
   `;
@@ -949,6 +984,169 @@ function initSubjectsManagement() {
 }
 
 /* ============================================================
+   11b. TIMETABLE RENDER
+   ============================================================ */
+function renderTimetable(data) {
+  const container = document.getElementById('facultyTimetableContainer');
+  if (!container) return;
+
+  const TIME_SLOTS = ['7-9', '9-11', '11-13', '13-15', '15-17', '17-19'];
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Build lookup: "Day-time" -> [{faculty, subject}]
+  const lookup = {};
+  data.forEach(item => {
+    const parts = item.slot.split(':');
+    const day  = parts[0].trim();
+    const time = (parts[1] || '').trim();
+    const key  = `${day}-${time}`;
+    if (!lookup[key]) lookup[key] = [];
+    lookup[key].push({ faculty: item.faculty, subject: item.subject });
+  });
+
+  let html = '<div class="timetable-scroll"><table class="timetable-grid"><thead><tr>';
+  html += '<th class="tt-time-col">Time</th>';
+  DAYS.forEach(d => { html += `<th class="tt-day-col tt-hd-${d}">${d}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  TIME_SLOTS.forEach(slot => {
+    html += `<tr><td class="tt-time-label">${slot}</td>`;
+    DAYS.forEach(day => {
+      const key = `${day}-${slot}`;
+      const entries = lookup[key] || [];
+      if (entries.length === 0) {
+        html += `<td class="tt-cell tt-empty"></td>`;
+      } else {
+        html += `<td class="tt-cell tt-filled tt-bg-${day}">`;
+        entries.forEach(e => {
+          html += `<div class="tt-entry">
+            <div class="tt-faculty-tag">${escapeHTML(e.faculty)}</div>
+            <div class="tt-subject-tag">${escapeHTML(e.subject)}</div>
+          </div>`;
+        });
+        html += `</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+/* ============================================================
+   11c. DASHBOARD FACULTY SUBJECT SUMMARY
+   ============================================================ */
+function renderFacultySubjectsSummary(data) {
+  const container = document.getElementById('dashboardFacultyAssignments');
+  if (!container) return;
+
+  const byFaculty = {};
+  data.forEach(item => {
+    if (!item.faculty) return;
+    if (!byFaculty[item.faculty]) byFaculty[item.faculty] = new Set();
+    byFaculty[item.faculty].add(item.subject);
+  });
+
+  if (!Object.keys(byFaculty).length) {
+    container.innerHTML = '<p class="empty-state-msg">No assignments to display.</p>';
+    return;
+  }
+
+  let html = '<div class="fac-assign-grid">';
+  Object.keys(byFaculty).sort().forEach(faculty => {
+    const subjects = Array.from(byFaculty[faculty]);
+    const units = (data.filter(d => d.faculty === faculty).length) * 2;
+    const colorClass = units > MAX_UNITS ? 'units-over' : units === MAX_UNITS ? 'units-max' : 'units-ok';
+    html += `<div class="fac-assign-card">
+      <div class="fac-assign-header">
+        <span class="fac-assign-avatar">${escapeHTML(faculty.charAt(0))}</span>
+        <span class="fac-assign-name">${escapeHTML(faculty)}</span>
+        <span class="units-badge ${colorClass}">${units}u</span>
+      </div>
+      <div class="fac-assign-chips">
+        ${subjects.map(s => `<span class="subject-chip">${escapeHTML(s)}</span>`).join('')}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+/* ============================================================
+   11d. EDIT MODAL
+   ============================================================ */
+function openEditModal(facultyName) {
+  const modal    = document.getElementById('editModal');
+  const nameInp  = document.getElementById('editFacultyName');
+  const maxInp   = document.getElementById('editMaxUnits');
+  const title    = document.getElementById('editModalTitle');
+  if (!modal) return;
+
+  // Find stored max units
+  const stored = loadFacultyFromStorage() || INITIAL_FACULTY;
+  const fac = stored.find(f => f.name === facultyName);
+
+  if (title)   title.textContent = `Edit: ${facultyName}`;
+  if (nameInp) nameInp.value = facultyName;
+  if (maxInp)  maxInp.value  = fac ? (fac.absolute_max_units || fac.max_units || 30) : 30;
+
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  setTimeout(() => maxInp && maxInp.focus(), 120);
+}
+
+function closeEditModal() {
+  const modal = document.getElementById('editModal');
+  if (modal) {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function initEditModal() {
+  const modal     = document.getElementById('editModal');
+  const closeBtn  = document.getElementById('editModalClose');
+  const cancelBtn = document.getElementById('editModalCancel');
+  const saveBtn   = document.getElementById('editModalSave');
+
+  closeBtn?.addEventListener('click',  closeEditModal);
+  cancelBtn?.addEventListener('click', closeEditModal);
+  modal?.addEventListener('click', e => { if (e.target === modal) closeEditModal(); });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeEditModal();
+  });
+
+  saveBtn?.addEventListener('click', () => {
+    const facultyName = document.getElementById('editFacultyName')?.value;
+    const newMax = parseInt(document.getElementById('editMaxUnits')?.value) || 30;
+    if (!facultyName) return;
+
+    // Update the faculty table row
+    document.querySelectorAll('#facultyInputTable tbody tr').forEach(row => {
+      const nameEl = row.querySelector('td:nth-child(1) input[type="text"]');
+      if (nameEl && nameEl.value.trim() === facultyName) {
+        const maxEl = row.querySelector('td:nth-child(3) input[type="number"]');
+        if (maxEl) maxEl.value = newMax;
+      }
+    });
+
+    saveFacultyToStorage();
+    closeEditModal();
+    showToast(`✓ Updated ${facultyName}'s max units → ${newMax}`);
+  });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toastNotif');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ============================================================
    12. EXPORT FUNCTIONS
    ============================================================ */
 function initExports() {
@@ -1041,6 +1239,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initFacultyManagement();
   initSubjectsManagement();
   initExports();
+  initEditModal();
 
   // Load faculty
   const savedFaculty = loadFacultyFromStorage();

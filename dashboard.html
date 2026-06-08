@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="favicon.png">
   <title>ATLAS PSU — Dashboard</title>
 
   <!-- Auth guard -->
@@ -92,6 +93,13 @@
           <h3>Faculty Load Distribution</h3>
           <div class="chart-canvas-wrap">
             <canvas id="dashboardChart"></canvas>
+          </div>
+        </div>
+
+        <div class="dashboard-chart-card" style="margin-top:20px;">
+          <h3>Subject Assignments by Faculty</h3>
+          <div id="dashboardFacultyAssignments" class="faculty-assignments-container">
+            <p class="empty-state-msg">Run the optimization to see faculty-subject assignments.</p>
           </div>
         </div>
       </section>
@@ -197,13 +205,21 @@
           </div>
         </div>
 
+        <div class="dashboard-chart-card" style="margin-bottom:28px;">
+          <h3>Subject Assignments by Faculty &amp; Time</h3>
+          <div id="facultyTimetableContainer" class="timetable-outer">
+            <p class="empty-state-msg">Run the optimization to see the schedule timetable.</p>
+          </div>
+        </div>
+
         <h3 class="section-heading">Summary of Results</h3>
         <table id="reportsSummaryTable">
           <thead>
             <tr>
               <th>Faculty</th>
-              <th>Days</th>
+              <th>Assigned Subjects &amp; Slots</th>
               <th>Total Units</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -274,6 +290,43 @@
 
     </div><!-- /.panels-container -->
   </main>
+
+  <!-- ========================================================
+       EDIT FACULTY MODAL
+       ======================================================== -->
+  <div id="editModal" class="modal-overlay" aria-hidden="true" role="dialog" aria-labelledby="editModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <p class="modal-label">Faculty Load Settings</p>
+          <h3 id="editModalTitle">Edit Faculty</h3>
+        </div>
+        <button class="modal-close-btn" id="editModalClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editFacultyName">
+        <div class="modal-form-group">
+          <label for="editMaxUnits">Maximum Teaching Units</label>
+          <div class="modal-input-wrap">
+            <input type="number" id="editMaxUnits" min="0" max="50" placeholder="e.g. 30">
+            <span class="modal-input-suffix">units</span>
+          </div>
+          <p class="modal-hint">Hard cap for GA assignment. Standard max is 24; overload limit is 30.</p>
+        </div>
+        <div class="modal-info-strip">
+          <span class="modal-info-dot"></span>
+          Changes apply to the next optimization run.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="editModalCancel" class="btn btn-secondary">Cancel</button>
+        <button id="editModalSave" class="btn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toastNotif" class="toast-notif" aria-live="polite"></div>
 
   <script>
     // Show department in profile label

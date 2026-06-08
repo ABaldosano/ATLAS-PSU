@@ -1060,3 +1060,420 @@ body.page-login {
   margin-bottom: 20px;
   letter-spacing: -0.01em;
 }
+/* ============================================================
+   SLOT BADGES (day-colored pills)
+   ============================================================ */
+.slot-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-left: 8px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.slot-Mon { background: #fef3c7; color: #92400e; }
+.slot-Tue { background: #ede9fe; color: #5b21b6; }
+.slot-Wed { background: #d1fae5; color: #065f46; }
+.slot-Thu { background: #ffedd5; color: #9a3412; }
+.slot-Fri { background: #dbeafe; color: #1e40af; }
+.slot-Sat { background: #fce7f3; color: #831843; }
+
+/* ============================================================
+   REPORTS SUMMARY TABLE — grouped rows
+   ============================================================ */
+.faculty-name-cell {
+  font-weight: 600;
+  vertical-align: top !important;
+  padding-top: 14px !important;
+  white-space: nowrap;
+}
+.faculty-name-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.faculty-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--brand-light);
+  color: var(--brand);
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.subject-slot-cell { padding: 7px 12px; }
+.subj-name-text {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+.total-units-cell {
+  text-align: center;
+  vertical-align: top !important;
+  padding-top: 12px !important;
+}
+.units-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.units-ok  { background: #d1fae5; color: #065f46; }
+.units-max { background: #ffedd5; color: #9a3412; }
+.units-over{ background: #fee2e2; color: #991b1b; }
+
+.actions-cell {
+  vertical-align: top !important;
+  padding-top: 10px !important;
+  white-space: nowrap;
+}
+.btn-edit-faculty {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.btn-edit-faculty:hover { background: var(--brand-dark); }
+
+/* row separator between faculty groups */
+.summary-row:first-of-type td { border-top: 2px solid var(--border); }
+
+/* ============================================================
+   FACULTY TIMETABLE
+   ============================================================ */
+.timetable-outer {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+}
+.timetable-scroll {
+  min-width: 700px;
+}
+.timetable-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+.timetable-grid thead th {
+  padding: 8px 10px;
+  font-size: 0.72rem;
+  text-align: center;
+  background: var(--bg-subtle);
+}
+.tt-time-col { width: 70px; }
+.tt-day-col  { width: calc((100% - 70px) / 6); }
+
+.tt-hd-Mon { color: #92400e; }
+.tt-hd-Tue { color: #5b21b6; }
+.tt-hd-Wed { color: #065f46; }
+.tt-hd-Thu { color: #9a3412; }
+.tt-hd-Fri { color: #1e40af; }
+.tt-hd-Sat { color: #831843; }
+
+.tt-time-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 6px 4px;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tt-cell {
+  padding: 4px;
+  vertical-align: top;
+  border: 1px solid var(--border);
+  min-height: 50px;
+}
+.tt-empty { background: var(--bg-page); }
+.tt-filled { background: var(--bg-white); }
+
+.tt-bg-Mon { background: #fffbeb; }
+.tt-bg-Tue { background: #f5f3ff; }
+.tt-bg-Wed { background: #f0fdf4; }
+.tt-bg-Thu { background: #fff7ed; }
+.tt-bg-Fri { background: #eff6ff; }
+.tt-bg-Sat { background: #fdf4ff; }
+
+.tt-entry {
+  margin-bottom: 4px;
+  border-radius: 4px;
+  padding: 3px 6px;
+  background: rgba(255,255,255,0.8);
+  border-left: 2px solid var(--brand);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+.tt-faculty-tag {
+  font-weight: 700;
+  color: var(--brand);
+  font-size: 0.68rem;
+}
+.tt-subject-tag {
+  color: var(--text-primary);
+  font-size: 0.68rem;
+}
+
+/* ============================================================
+   DASHBOARD — FACULTY ASSIGNMENTS SUMMARY
+   ============================================================ */
+.faculty-assignments-container {
+  min-height: 80px;
+}
+.fac-assign-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 4px 0;
+}
+.fac-assign-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: var(--bg-subtle);
+  transition: box-shadow 0.15s;
+}
+.fac-assign-card:hover { box-shadow: var(--shadow-sm); }
+.fac-assign-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.fac-assign-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--brand-light);
+  color: var(--brand);
+  font-size: 0.78rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.fac-assign-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  flex: 1;
+}
+.fac-assign-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.subject-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--bg-white);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.empty-state-msg {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-style: italic;
+  padding: 16px 0;
+  text-align: center;
+}
+
+/* ============================================================
+   EDIT MODAL
+   ============================================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 26, 0.45);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+.modal-card {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.10);
+  width: 100%;
+  max-width: 420px;
+  margin: 0 20px;
+  transform: translateY(-12px) scale(0.98);
+  transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), opacity 0.18s ease;
+  overflow: hidden;
+}
+.modal-overlay.open .modal-card {
+  transform: translateY(0) scale(1);
+}
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--brand);
+  margin-bottom: 3px;
+}
+.modal-header h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+.modal-close-btn:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+.modal-body { padding: 22px 24px; }
+.modal-form-group { margin-bottom: 16px; }
+.modal-form-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 7px;
+}
+.modal-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.modal-input-wrap input[type="number"] {
+  flex: 1;
+  padding: 9px 44px 9px 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-white);
+  color: var(--text-primary);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+  width: 100%;
+}
+.modal-input-wrap input[type="number"]:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(192,68,10,0.10);
+}
+.modal-input-suffix {
+  position: absolute;
+  right: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.modal-hint {
+  font-size: 0.73rem;
+  color: var(--text-muted);
+  margin-top: 7px;
+  line-height: 1.5;
+}
+.modal-info-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--brand-light);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.75rem;
+  color: var(--brand-dark);
+  font-weight: 500;
+}
+.modal-info-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand);
+  flex-shrink: 0;
+}
+.modal-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+.modal-footer .btn {
+  min-width: 100px;
+  padding: 9px 20px;
+  font-size: 0.85rem;
+}
+
+/* ============================================================
+   TOAST NOTIFICATION
+   ============================================================ */
+.toast-notif {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #111;
+  color: #fff;
+  padding: 10px 22px;
+  border-radius: 99px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 30000;
+  white-space: nowrap;
+}
+.toast-notif.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
