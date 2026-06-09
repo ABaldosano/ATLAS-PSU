@@ -78,7 +78,7 @@ const DEFAULT_SUBJECTS = [
   { name: 'Quantitative Methods w/ Modelling and Simulation',   type: 'Software',    year: '2nd Year', semester: '2nd Semester', lec_units: 3, lab_units: 0 },
   { name: 'Network Technologies 1',                             type: 'Networking',  year: '2nd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
   { name: 'Integrative Programming Technologies 1',             type: 'Software',    year: '2nd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Systems Integration and Architecture 1',             type: 'Software',    year: '2nd Year', semester: '2nd Semester', lec_units: 3, lab_units: 0 },
+  { name: 'Systems Integration and Architecture 1',             type: 'Software',    year: '2nd Year', semester: '3rd Semester', lec_units: 3, lab_units: 0 },
   { name: 'Advanced Database Systems',                          type: 'Database',    year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
   { name: 'Network Technologies 2',                             type: 'Networking',  year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
   { name: 'Information Assurance and Security 1',               type: 'Software',    year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 0 },
@@ -298,92 +298,50 @@ function updateCharts(data) {
   });
 
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  const labels = sorted.map(e => e[0]);
-  const values = sorted.map(e => Number(e[1]));
-  const colors = values.map(getLoadColor);
+  const labels = sorted.map(x => x[0]);
+  const values = sorted.map(x => x[1]);
+  const colors = values.map(v => getLoadColor(v));
 
-  // Dashboard chart
   if (dashboardChart) {
     dashboardChart.data.labels = labels;
     dashboardChart.data.datasets[0].data = values;
     dashboardChart.data.datasets[0].backgroundColor = colors;
     dashboardChart.update();
-    dashboardChart.resize();
   }
-
-  // Bar chart
+  if (miniDashChart) {
+    miniDashChart.data.labels = labels;
+    miniDashChart.data.datasets[0].data = values;
+    miniDashChart.data.datasets[0].backgroundColor = colors;
+    miniDashChart.update();
+  }
+  if (reportsChart) {
+    reportsChart.data.labels = labels;
+    reportsChart.data.datasets[0].data = values;
+    reportsChart.update();
+  }
   if (reportsBarChart) {
     reportsBarChart.data.labels = labels;
     reportsBarChart.data.datasets[0].data = values;
     reportsBarChart.data.datasets[0].backgroundColor = colors;
     reportsBarChart.update();
   }
-
-  // Pie chart
-  if (reportsChart) {
-    reportsChart.data.labels = Object.keys(counts);
-    reportsChart.data.datasets[0].data = Object.values(counts);
-    reportsChart.update();
-  }
-
-  // Update stat cards
-  updateDashboardStats(counts);
-}
-
-function updateDashboardStats(counts) {
-  const values = Object.values(counts);
-  if (!values.length) return;
-
-  const avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
-  const overloaded = values.filter(v => v > MAX_UNITS).length;
-  const maxV = Math.max(...values);
-  const minV = Math.min(...values);
-  const balance = maxV > 0 ? ((1 - (maxV - minV) / maxV) * 100).toFixed(0) : 100;
-
-  const elAvg  = document.getElementById('statAvgLoad');
-  const elOver = document.getElementById('statOverloaded');
-  const elBal  = document.getElementById('statBalance');
-
-  if (elAvg)  elAvg.textContent  = avg;
-  if (elOver) elOver.textContent = overloaded;
-  if (elBal)  elBal.textContent  = balance + '%';
-}
-
-function updateMiniFromServer(data) {
-  if (!data || !data.result || !Array.isArray(data.result)) return;
-
-  const counts = {};
-  data.result.forEach(item => {
-    counts[item.faculty] = (counts[item.faculty] || 0) + 2;
-  });
-
-  if (!miniDashChart) return;
-
-  miniDashChart.data.labels = Object.keys(counts);
-  miniDashChart.data.datasets[0].data = Object.values(counts);
-  miniDashChart.data.datasets[0].backgroundColor = Object.values(counts).map(getLoadColor);
-  miniDashChart.update();
 }
 
 /* ============================================================
-   6. REPORTS PANEL UPDATE
+   6. ANALYTICS & FAIRNESS REPORT
    ============================================================ */
-/* ── FAIRNESS REPORT ───────────────────────────────────────────── */
-// Subject-type → broad spec keywords for match heuristic
 const TYPE_SPEC_KEYWORDS = {
-  Software:   ['software','programming','application','emerging','integration','web','multimedia','embedded','hci','human-computer','graphics','visual','algorithms','data structures','gis','geographic'],
-  Database:   ['database','information systems','information management'],
-  Networking: ['network','cybersecurity','information assurance'],
-  Elective:   [] // electives match any
+  Software:  ['software','programming','application','emerging','integration','web','multimedia','embedded','hci','human-computer','graphics','visual','algorithms','data structures','gis','geographic'],
+  Database:  ['database','information systems','information management'],
+  Networking:['network','cybersecurity','information assurance'],
+  Elective:  [] // electives match any
 };
 
 function specMatchesType(specList, subjectType) {
   if (!subjectType || subjectType === 'Elective') return true;
   const keywords = TYPE_SPEC_KEYWORDS[subjectType] || [];
   if (!keywords.length) return true;
-  return specList.some(sp =>
-    keywords.some(kw => sp.toLowerCase().includes(kw))
-  );
+  return specList.some(sp => keywords.some(kw => sp.toLowerCase().includes(kw)) );
 }
 
 function computeFairnessReport(data) {
@@ -393,53 +351,55 @@ function computeFairnessReport(data) {
   const loadMap = {};
   data.forEach(item => {
     if (!item.faculty) return;
-    loadMap[item.faculty] = (loadMap[item.faculty] || 0) + 2; // each item = 2 units
+    loadMap[item.faculty] = (loadMap[item.faculty] || 0) + 2; // each item is 2 units
   });
 
-  const loads = Object.values(loadMap);
-  const n = loads.length;
-  if (!n) return;
+  const facultyData = getFacultyFromTable();
+  const facMeta = {};
+  facultyData.forEach(f => { facMeta[f.name] = f; });
 
-  // Std deviation
-  const mean = loads.reduce((a, b) => a + b, 0) / n;
-  const variance = loads.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
-  const stdDev = Math.sqrt(variance);
+  const totalAssigned = data.length;
+  let matchedSpecs = 0;
+  const perFaculty = {};
 
-  // Jain's Fairness Index: (Σx)² / (n · Σx²)
-  const sumX  = loads.reduce((a, b) => a + b, 0);
-  const sumX2 = loads.reduce((a, b) => a + b * b, 0);
-  const jain  = sumX2 === 0 ? 1 : (sumX * sumX) / (n * sumX2);
-
-  // Specialization match rate - use faculty data from table
-  const facultyList = getFacultyFromTable();
-  const specMap = {};
-  facultyList.forEach(f => { specMap[f.name] = f.specialization || []; });
-
-  // Get subject type from GA result items (item may carry .type from expanded subjects)
-  let totalAssignments = 0;
-  let matchedAssignments = 0;
-  const perFaculty = {}; // name → {total, matched}
+  // Initialize per-faculty trackers
+  facultyData.forEach(f => {
+    perFaculty[f.name] = { total: 0, matched: 0, load: loadMap[f.name] || 0 };
+  });
 
   data.forEach(item => {
-    if (!item.faculty) return;
-    if (!perFaculty[item.faculty]) perFaculty[item.faculty] = { total: 0, matched: 0, load: loadMap[item.faculty] };
+    if (!item.faculty || !perFaculty[item.faculty]) return;
     perFaculty[item.faculty].total++;
-    totalAssignments++;
-    const specs = specMap[item.faculty] || [];
-    // item.type may be present if GA returns it; otherwise infer from subject name heuristic
-    const subType = item.type || guessSubjectType(item.subject);
-    if (specMatchesType(specs, subType)) {
-      matchedAssignments++;
-      perFaculty[item.faculty].matched++;
+    
+    const meta = facMeta[item.faculty];
+    if (meta) {
+      const isMatch = specMatchesType(meta.specialization, item.type);
+      if (isMatch) {
+        matchedSpecs++;
+        perFaculty[item.faculty].matched++;
+      }
     }
   });
 
-  const matchRate = totalAssignments > 0 ? (matchedAssignments / totalAssignments) * 100 : 0;
+  // 1. Match Rate
+  const matchRate = totalAssigned ? (matchedSpecs / totalAssigned) * 100 : 0;
 
-  // Overall fairness score: average of jain & normalised match rate
-  const fairnessScore = ((jain + matchRate / 100) / 2 * 100).toFixed(1);
-  const scoreClass = fairnessScore >= 80 ? 'fairness-score-good' : fairnessScore >= 60 ? 'fairness-score-ok' : 'fairness-score-poor';
-  const scoreLabel = fairnessScore >= 80 ? 'Good - load well distributed' : fairnessScore >= 60 ? 'Moderate - minor imbalances' : 'Poor - significant imbalances';
+  // 2. Jain's Fairness Index & Std Dev
+  const loads = facultyData.map(f => loadMap[f.name] || 0);
+  const n = loads.length;
+  let sumLoads = 0, sumSqLoads = 0;
+  loads.forEach(l => { sumLoads += l; sumSqLoads += l * l; });
+
+  const jain = (sumLoads * sumLoads) / (n * sumSqLoads || 1);
+  const mean = sumLoads / (n || 1);
+  let varianceSum = 0;
+  loads.forEach(l => { varianceSum += Math.pow(l - mean, 2); });
+  const stdDev = Math.sqrt(varianceSum / (n || 1));
+
+  // Overall combined rating score (0 - 100%)
+  const fairnessScore = Math.round((jain * 0.6 + (matchRate / 100) * 0.4) * 100);
+  const scoreClass = fairnessScore >= 85 ? 'good' : fairnessScore >= 60 ? 'warning' : 'danger';
+  const scoreLabel = fairnessScore >= 85 ? 'Excellent - Highly balanced' : fairnessScore >= 60 ? 'Moderate - minor imbalances' : 'Poor - significant imbalances';
 
   // Update summary cards
   const el = id => document.getElementById(id);
@@ -447,117 +407,64 @@ function computeFairnessReport(data) {
   el('fairnessScore').className = 'fairness-card-value ' + scoreClass;
   el('fairnessScoreLabel').textContent = scoreLabel;
   el('fairnessJain').textContent = jain.toFixed(4);
+  el('fairnessSumUnits').textContent = sumLoads + ' u';
   el('fairnessStdDev').textContent = stdDev.toFixed(2) + ' u';
   el('fairnessMatchRate').textContent = matchRate.toFixed(1) + '%';
 
   // Per-faculty table
   const container = document.getElementById('fairnessPerFaculty');
   if (!container) return;
+
   const rows = Object.keys(perFaculty).sort().map(name => {
     const d = perFaculty[name];
     const pct = d.total ? Math.round((d.matched / d.total) * 100) : 0;
     const cls = pct === 100 ? 'match-yes' : pct >= 50 ? 'match-partial' : 'match-no';
-    const loadCls = d.load > MAX_UNITS ? 'units-over' : d.load === MAX_UNITS ? 'units-max' : 'units-ok';
-    return `<tr>
-      <td>${escapeHTML(name)}</td>
-      <td><span class="units-badge ${loadCls}">${d.load}</span></td>
-      <td>${d.total}</td>
-      <td class="${cls}">${pct}%</td>
-    </tr>`;
-  }).join('');
+    const loadCls = d.load > MAX_UNITS ? 'badge-danger' : d.load === MAX_UNITS ? 'badge-warning' : 'badge-success';
+
+    return `
+      <tr>
+        <td><strong>${escapeHTML(name)}</strong></td>
+        <td><span class="load-badge ${loadCls}">${d.load} / ${facMeta[name]?.max_units || 24} u</span></td>
+        <td>${d.total} classes</td>
+        <td><span class="match-indicator ${cls}">${pct}% match (${d.matched}/${d.total})</span></td>
+      </tr>
+    `;
+  });
 
   container.innerHTML = `
-    <table class="fairness-per-faculty-table">
-      <thead><tr>
-        <th>Faculty</th><th>Load (units)</th><th>Assignments</th><th>Spec Match</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-}
-
-function guessSubjectType(subjectName) {
-  const n = (subjectName || '').toLowerCase();
-  if (/network|cisco/.test(n)) return 'Networking';
-  if (/database|information management|data science/.test(n)) return 'Database';
-  return 'Software';
-}
-
-function updateReportsPanel(data) {
-  if (!data || !data.length) return;
-
-  // Group by faculty
-  const byFaculty = {};
-  data.forEach(item => {
-    if (!item.faculty) return;
-    if (!byFaculty[item.faculty]) byFaculty[item.faculty] = [];
-    byFaculty[item.faculty].push(item);
-  });
-
-  const tbody = document.querySelector('#reportsSummaryTable tbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-
-  Object.keys(byFaculty).sort().forEach(faculty => {
-    const assignments = byFaculty[faculty];
-    const totalUnits = assignments.length * 2;
-
-    assignments.forEach((item, idx) => {
-      const day = item.slot.split(':')[0].trim();
-      const tr = document.createElement('tr');
-      tr.className = 'summary-row';
-
-      const subjectSlotHTML = `
-        <td class="subject-slot-cell">
-          <span class="subj-name-text">${escapeHTML(item.subject)}</span>
-          <span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(item.slot)}</span>
-        </td>
-      `;
-
-      if (idx === 0) {
-        tr.innerHTML = `
-          <td class="faculty-name-cell" rowspan="${assignments.length}">
-            <div class="faculty-name-inner">
-              <span class="faculty-avatar">${escapeHTML(faculty.charAt(0))}</span>
-              <span>${escapeHTML(faculty)}</span>
-            </div>
-          </td>
-          ${subjectSlotHTML}
-          <td class="total-units-cell" rowspan="${assignments.length}">
-            <span class="units-badge ${totalUnits > MAX_UNITS ? 'units-over' : totalUnits === MAX_UNITS ? 'units-max' : 'units-ok'}">${totalUnits}</span>
-          </td>
-          <td class="actions-cell" rowspan="${assignments.length}">
-            <button class="btn-edit-faculty" data-faculty="${escapeAttr(faculty)}">&#9998; Edit</button>
-          </td>
-        `;
-      } else {
-        tr.innerHTML = subjectSlotHTML;
-      }
-
-      tbody.appendChild(tr);
-    });
-  });
-
-  // Bind edit buttons
-  tbody.querySelectorAll('.btn-edit-faculty').forEach(btn => {
-    btn.addEventListener('click', () => openEditModal(btn.dataset.faculty));
-  });
-
-  computeFairnessReport(data);
+    <table class="data-table layout-fixed">
+      <thead>
+        <tr>
+          <th>Faculty Member</th>
+          <th>Workload Status</th>
+          <th>Total Classes</th>
+          <th>Specialization Accuracy</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.join('') || '<tr><td colspan="4" class="empty-state-msg">No faculty metrics computed yet.</td></tr>'}
+      </tbody>
+    </table>
+  `;
 }
 
 /* ============================================================
-   7. GA SCHEDULE TABLE
+   7. TABLE RENDERING & SORTING
    ============================================================ */
-function renderGASchedule(data) {
-  const tbody = document.querySelector('#gaScheduleTable tbody');
+function renderTable(data) {
+  const tbody = document.querySelector('#gaResultsTable tbody');
   if (!tbody) return;
-
   tbody.innerHTML = '';
 
-  // Sort by day then time slot
+  if (!data || !data.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-state-msg">No optimal assignments found. Adjust parameters and click "Run Engine".</td></tr>';
+    return;
+  }
+
+  // Pre-sort by Day Order then Slot Order by default
   const sorted = [...data].sort((a, b) => {
     const parseSlot = s => {
-      const [dayPart, timePart] = s.split(':');
+      const [dayPart, timePart] = (s || '').split(':');
       return { day: dayPart.trim(), unit: parseInt((timePart || '0').trim()) };
     };
     const sA = parseSlot(a.slot), sB = parseSlot(b.slot);
@@ -589,92 +496,69 @@ function applySort(data, key, ascending) {
     if (key === 'slot') {
       const ps = s => {
         const [d, t] = s.split(':');
-        return { day: d.trim(), unit: parseInt((t || '0').trim()) };
+        return (DAY_ORDER[d.trim()] * 100) + parseInt(t || '0');
       };
-      const sA = ps(a.slot), sB = ps(b.slot);
-      const dd = DAY_ORDER[sA.day] - DAY_ORDER[sB.day];
-      if (dd !== 0) return dd * dir;
-      return (sA.unit - sB.unit) * dir;
+      return (ps(a.slot) - ps(b.slot)) * dir;
     }
-    const va = String(a[key] || ''), vb = String(b[key] || '');
-    if (!isNaN(va) && !isNaN(vb)) return (Number(va) - Number(vb)) * dir;
-    return va.localeCompare(vb) * dir;
+    return (a[key] || '').localeCompare(b[key] || '') * dir;
   });
 }
 
 function enableTableSort() {
-  const table = document.getElementById('gaScheduleTable');
-  if (!table) return;
+  document.querySelectorAll('#gaResultsTable th[data-sort]').forEach(th => {
+    // Clean old listeners
+    const cloned = th.cloneNode(true);
+    th.parentNode.replaceChild(cloned, th);
 
-  const headers = table.querySelectorAll('th[data-key]');
-  headers.forEach(header => {
-    // Remove old listeners by cloning
-    const newHeader = header.cloneNode(true);
-    header.parentNode.replaceChild(newHeader, header);
+    // Active arrow indicator
+    if (cloned.dataset.sort === lastSort.key) {
+      cloned.classList.add('sorted-active');
+      cloned.classList.toggle('sorted-desc', !lastSort.ascending);
+    } else {
+      cloned.classList.remove('sorted-active', 'sorted-desc');
+    }
 
-    newHeader.addEventListener('click', () => {
-      const key = newHeader.dataset.key;
-      if (lastSort.key === key) {
+    cloned.addEventListener('click', () => {
+      if (lastSort.key === cloned.dataset.sort) {
         lastSort.ascending = !lastSort.ascending;
       } else {
-        lastSort.key = key;
+        lastSort.key = cloned.dataset.sort;
         lastSort.ascending = true;
       }
-
-      const tbody = table.querySelector('tbody');
-      const rows = Array.from(tbody.querySelectorAll('tr'));
-
-      const rowData = rows.map(r => ({
-        faculty: r.children[0]?.textContent.trim() || '',
-        subject: r.children[1]?.textContent.trim() || '',
-        type:    r.children[2]?.textContent.trim() || '',
-        slot:    r.children[3]?.textContent.trim() || '',
-        el:      r
-      }));
-
-      applySort(rowData, lastSort.key, lastSort.ascending);
-      tbody.innerHTML = '';
-      rowData.forEach(d => tbody.appendChild(d.el));
-
-      table.querySelectorAll('th[data-key] .sort-arrow').forEach(el => { el.innerHTML = '&#9650;'; });
-      const arrow = newHeader.querySelector('.sort-arrow');
-      if (arrow) arrow.innerHTML = lastSort.ascending ? '&#9650;' : '&#9660;';
+      renderTable(lastGAResult);
     });
   });
 }
 
 /* ============================================================
-   8. GA PROGRESS BAR
+   8. RUN GENETIC ALGORITHM ENGINE
    ============================================================ */
-const progressFill = document.querySelector('#gaProgressBar .fill');
+let progressInterval = null;
+const progressFill = document.getElementById('gaProgressFill');
 
-function updateProgress(current, total) {
-  const pct = Math.min(100, (current / total) * 100);
-  if (!progressFill) return;
-  progressFill.style.width = pct + '%';
-  progressFill.style.backgroundColor = getProgressColor(pct);
-}
+async function triggerGARunAPI() {
+  const population  = document.getElementById('populationSize').value;
+  const generations = document.getElementById('numGenerations').value;
+  const mutation    = document.getElementById('mutationRate').value;
+  const crossover   = document.getElementById('crossoverRate').value;
 
-/* ============================================================
-   9. RUN GA
-   ============================================================ */
-async function startGA(population, generations, mutation, crossover) {
-  let subjects = getSubjectsFromTable();
-  if (!subjects || !subjects.length) subjects = DEFAULT_SUBJECTS;
-
-  const expandedSubjects = subjects.map(sub => ({
-    name:  sub.name,
-    type:  sub.type,
-    hours: (Number(sub.lec_units) || 0) + ((Number(sub.lab_units) || 0) * 3)
-  }));
+  // Transform UI subjects list to match backend specification format properties payload architecture requirements
+  const rawSubjects = getSubjectsFromTable();
+  const expandedSubjects = [];
+  rawSubjects.forEach(s => {
+    const count = s.hours / 2; // Assuming 2 hours per block segment schedule layout structure paradigm
+    for(let i=0; i<count; i++) {
+      expandedSubjects.push({ name: s.name, type: s.type, hours: 2 });
+    }
+  });
 
   const payload = {
-    faculty:     getFacultyFromTable(),
-    subjects:    expandedSubjects,
-    population:  Number(population),
-    generations: Number(generations),
-    mutation:    Number(mutation),
-    crossover:   Number(crossover)
+    faculty:    getFacultyFromTable(),
+    subjects:   expandedSubjects,
+    population: Number(population),
+    generations:Number(generations),
+    mutation:   Number(mutation),
+    crossover:  Number(crossover)
   };
 
   const response = await fetch(`${API_BASE}/run-ga`, {
@@ -682,125 +566,92 @@ async function startGA(population, generations, mutation, crossover) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-
   const data = await response.json();
   if (!data.status) throw new Error('GA start failed');
 }
 
 function initRunGA() {
-  const runBtn      = document.getElementById('runGA');
-  const loading     = document.getElementById('gaLoading');
+  const runBtn = document.getElementById('runGA');
+  const loading = document.getElementById('gaLoading');
   const tableWrapper= document.getElementById('gaTableWrapper');
-  const genCounter  = document.getElementById('generationCounter');
+  const genCounter = document.getElementById('generationCounter');
 
   if (!runBtn) return;
 
   runBtn.addEventListener('click', async () => {
-    const popSize    = document.getElementById('populationSize').value;
+    const popSize = document.getElementById('populationSize').value;
     const generations= document.getElementById('numGenerations').value;
-    const mutRate    = document.getElementById('mutationRate').value;
-    const crossover  = document.getElementById('crossoverRate').value;
+    const mutRate = document.getElementById('mutationRate').value;
+    const crossover = document.getElementById('crossoverRate').value;
 
     loading.classList.remove('hidden');
     tableWrapper.classList.add('hidden');
     runBtn.disabled = true;
-
-    if (progressFill) { progressFill.style.width = '0%'; }
-    if (genCounter) genCounter.textContent = '0';
-
-    try {
-      await startGA(popSize, generations, mutRate, crossover);
-    } catch (err) {
-      console.error('GA start error:', err);
-      loading.classList.add('hidden');
-      runBtn.disabled = false;
-      return;
+    if (progressFill) {
+      progressFill.style.width = '0%';
     }
 
-    const interval = setInterval(async () => {
-      try {
-        const res  = await fetch(`${API_BASE}/progress`);
-        const data = await res.json();
+    try {
+      await triggerGARunAPI();
 
-        const pct = data.total ? Math.min(100, (data.current / data.total) * 100) : 0;
-        if (genCounter) genCounter.textContent = data.current || '0';
-        updateProgress(data.current, data.total);
-        updateMiniFromServer(data);
+      // Poll progress endpoint loop integration routine
+      progressInterval = setInterval(async () => {
+        try {
+          const res = await fetch(`${API_BASE}/progress`);
+          const status = await res.json();
 
-        if (!data.running) {
-          clearInterval(interval);
-          tableWrapper.classList.remove('hidden');
-          loading.classList.add('hidden');
-          runBtn.disabled = false;
-
-          if (Array.isArray(data.result) && data.result.length > 0) {
-            lastGAResult = data.result;
-            renderGASchedule(data.result);
-            updateCharts(data.result);
-            updateReportsPanel(data.result);
-            renderTimetable(data.result);
-            renderFacultySubjectsSummary(data.result);
+          if (status.total > 0) {
+            const pct = Math.round((status.current / status.total) * 100);
+            if (progressFill) {
+              progressFill.style.width = pct + '%';
+              progressFill.style.backgroundColor = getProgressColor(pct);
+            }
+            if (genCounter) {
+              genCounter.textContent = `Generations Optimized: ${status.current} / ${status.total}`;
+            }
           }
+
+          if (!status.running) {
+            clearInterval(progressInterval);
+            loading.classList.add('hidden');
+            tableWrapper.classList.remove('hidden');
+            runBtn.disabled = false;
+
+            lastGAResult = status.result || [];
+            renderTable(lastGAResult);
+            updateCharts(lastGAResult);
+            computeFairnessReport(lastGAResult);
+            renderDashboardAssignments(lastGAResult);
+            renderSubjectsGrouped();
+            showToast('Optimization Run Complete!', 'success');
+          }
+        } catch (err) {
+          console.error('Polling error:', err);
         }
-      } catch (err) {
-        console.error('Progress poll error:', err);
-      }
-    }, 200);
+      }, 400);
+
+    } catch (e) {
+      clearInterval(progressInterval);
+      loading.classList.add('hidden');
+      runBtn.disabled = false;
+      alert('Failed to connect to backend engine: ' + e.message);
+    }
   });
 }
 
 /* ============================================================
-   10. FACULTY MANAGEMENT
+   9. FACULTY MANAGEMENT SYSTEM
    ============================================================ */
-function getFacultyFromTable() {
-  const rows = document.querySelectorAll('#facultyInputTable tbody tr');
-  const result = [];
-
-  rows.forEach(row => {
-    const nameEl  = row.querySelector('td:nth-child(1) input[type="text"]');
-    const maxEl   = row.querySelector('td:nth-child(3) input[type="number"]');
-    if (!nameEl || !maxEl) return;
-
-    const name = nameEl.value.trim();
-    const specialization = Array.from(
-      row.querySelectorAll('td:nth-child(2) input[type="checkbox"]:checked')
-    ).map(cb => cb.value);
-
-    const availability = [];
-    row.querySelectorAll('td:nth-child(4) input[type="checkbox"]').forEach(cb => {
-      if (cb.checked) {
-        for (const key in DAY_MAP) {
-          if (DAY_MAP[key] === cb.value) availability.push(key);
-        }
-      }
-    });
-
-    const absolute_max_units = parseInt(maxEl.value) || 30;
-
-    if (name && specialization.length > 0) {
-      result.push({
-        name,
-        specialization,
-        max_units: absolute_max_units,
-        absolute_max_units,
-        availability
-      });
-    }
-  });
-
-  return result;
-}
-
-function addFacultyRow(facultyData = null) {
+function addFacultyRow(data = {}) {
   const tbody = document.querySelector('#facultyInputTable tbody');
   if (!tbody) return;
 
-  const nameValue    = facultyData?.name || '';
-  const specsSelected= facultyData?.specialization || [];
-  const daysSelected = (facultyData?.availability || []).map(d => DAY_MAP[d]);
-  const maxUnits     = facultyData?.absolute_max_units || 30;
-
   const tr = document.createElement('tr');
+
+  const nameValue     = data.name || '';
+  const specsSelected = data.specialization || [];
+  const maxUnits      = data.max_units !== undefined ? data.max_units : 24;
+  const daysSelected  = data.availability || ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
   const checkboxHTML = SPECIALIZATIONS.map(spec => `
     <label>
@@ -830,101 +681,125 @@ function addFacultyRow(facultyData = null) {
     </td>
     <td><input type="number" value="${maxUnits}" min="0" max="50"></td>
     <td><div class="avail-checkboxes">${daysHTML}</div></td>
-    <td><button type="button" class="btn-remove btn">Remove</button></td>
+    <td><button type="button" class="btn-delete row-action-btn" title="Delete Row">×</button></td>
   `;
 
-  // Dropdown toggle
-  const dropBtn = tr.querySelector('.dropdown-btn');
-  const dropContent = tr.querySelector('.dropdown-content');
+  // Bind dropdown toggle action handler listener sequence hook event context capture bubble logic
+  const btn = tr.querySelector('.dropdown-btn');
   const dropdown = tr.querySelector('.multi-select-dropdown');
-
-  dropBtn.addEventListener('click', e => {
+  btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const isOpen = dropdown.classList.contains('open');
-
-    // Close all other dropdowns first
-    document.querySelectorAll('.multi-select-dropdown.open').forEach(d => {
-      d.classList.remove('open');
-    });
-
-    if (!isOpen) {
+    const open = dropdown.classList.contains('open');
+    document.querySelectorAll('.multi-select-dropdown.open').forEach(d => d.classList.remove('open'));
+    if (!open) {
       dropdown.classList.add('open');
-      // Position dropdown using fixed coords so it escapes any overflow:hidden parent
-      const rect = dropBtn.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const panelH = Math.min(260, spaceBelow - 8);
-      dropContent.style.top    = (rect.bottom + 4) + 'px';
-      dropContent.style.left   = rect.left + 'px';
-      dropContent.style.width  = Math.max(300, rect.width) + 'px';
-      dropContent.style.maxHeight = Math.max(120, panelH) + 'px';
+      repositionDropdown(dropdown);
     }
   });
 
-  // OK button
-  const okBtn = tr.querySelector('.dropdown-ok-btn');
-  okBtn.addEventListener('click', e => {
+  // Bind OK button handler loop cycle tracking event trigger layer
+  tr.querySelector('.dropdown-ok-btn').addEventListener('click', (e) => {
     e.stopPropagation();
-    confirmDropdownSelection(dropdown);
+    dropdown.classList.remove('open');
+    updateDropdownLabel(dropdown);
+    saveFaculty();
   });
 
-  // Remove button
-  tr.querySelector('.btn-remove').addEventListener('click', () => {
+  // Checkbox change tracker hooks
+  dropdown.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+    chk.addEventListener('change', () => {
+      updateDropdownLabel(dropdown);
+      saveFaculty();
+    });
+  });
+
+  // Input fields change auto save triggers
+  tr.querySelectorAll('input[type="text"], input[type="number"]').forEach(input => {
+    input.addEventListener('input', debounce(saveFaculty, 500));
+  });
+
+  tr.querySelectorAll('.avail-checkboxes input').forEach(chk => {
+    chk.addEventListener('change', () => {
+      saveFaculty();
+      updateAllSelectAllBtnStates();
+    });
+  });
+
+  // Row delete handler action integration layer
+  tr.querySelector('.btn-delete').addEventListener('click', () => {
     tr.remove();
-    saveFacultyToStorage();
-  });
-
-  // Save on input change
-  tr.querySelectorAll('input').forEach(inp => {
-    inp.addEventListener('change', saveFacultyToStorage);
-    inp.addEventListener('input', saveFacultyToStorage);
+    saveFaculty();
+    updateAllSelectAllBtnStates();
   });
 
   tbody.appendChild(tr);
 }
 
-function confirmDropdownSelection(dropdown) {
-  const checked = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:checked'))
-    .map(cb => cb.value);
-  const display = checked.length ? checked.join(', ') : 'Choose Specialization';
+function updateDropdownLabel(dropdown) {
+  const checked = Array.from(dropdown.querySelectorAll('.dropdown-content input:checked')).map(c => c.value);
   const btn = dropdown.querySelector('.dropdown-btn');
-  const truncated = display.length > 45 ? display.substring(0, 45) + '...' : display;
-  btn.textContent = truncated;
-  btn.title = display;
-  dropdown.classList.remove('open');
-  saveFacultyToStorage();
+  const txt = checked.length ? checked.join(', ') : 'Choose Specialization';
+  btn.textContent = txt.length > 45 ? txt.substring(0, 45) + '...' : txt;
+  btn.title = txt;
 }
 
-function updateSelectAllBtnState(day) {
-  const dayLong = DAY_MAP[day];
-  const checkboxes = Array.from(
-    document.querySelectorAll(`#facultyInputTable tbody tr .avail-checkboxes input[value="${dayLong}"]`)
-  );
-  const btn = document.querySelector(`.btn-select-day[data-day="${day}"]`);
-  if (!btn) return;
-  const allChecked = checkboxes.length > 0 && checkboxes.every(cb => cb.checked);
-  btn.classList.toggle('all-selected', allChecked);
+function repositionDropdown(dropdown) {
+  const content = dropdown.querySelector('.dropdown-content');
+  const rect = dropdown.getBoundingClientRect();
+  
+  content.style.position = 'fixed';
+  content.style.top = (rect.bottom + window.scrollY) + 'px';
+  content.style.left = (rect.left + window.scrollX) + 'px';
+  content.style.width = rect.width + 'px';
+  content.style.zIndex = '9999';
+}
+
+function selectAllByDay(dayLong) {
+  const checkboxes = document.querySelectorAll(`#facultyTable tbody input[value="${dayLong}"]`);
+  if (!checkboxes.length) return;
+
+  // Check if all are currently checked to toggle state correctly
+  const allChecked = Array.from(checkboxes).every(c => c.checked);
+  checkboxes.forEach(c => { c.checked = !allChecked; });
+  
+  saveFaculty();
+  updateAllSelectAllBtnStates();
 }
 
 function updateAllSelectAllBtnStates() {
-  Object.keys(DAY_MAP).forEach(day => updateSelectAllBtnState(day));
+  Object.entries(DAY_MAP).forEach(([short, long]) => {
+    const btn = document.querySelector(`.btn-select-day[data-day="${long}"]`);
+    if (!btn) return;
+
+    const checkboxes = document.querySelectorAll(`#facultyTable tbody input[value="${long}"]`);
+    if (!checkboxes.length) {
+      btn.classList.remove('active');
+      return;
+    }
+
+    const allChecked = Array.from(checkboxes).every(c => c.checked);
+    btn.classList.toggle('active', allChecked);
+  });
 }
 
-function selectAllByDay(day) {
-  const dayLong = DAY_MAP[day];
-  const checkboxes = Array.from(
-    document.querySelectorAll(`#facultyInputTable tbody tr .avail-checkboxes input[value="${dayLong}"]`)
-  );
-  if (!checkboxes.length) return;
+function getFacultyFromTable() {
+  return Array.from(document.querySelectorAll('#facultyTable tbody tr')).map(row => {
+    const name = row.querySelector('input[type="text"]').value.trim();
+    const specs = Array.from(row.querySelectorAll('.dropdown-content input:checked')).map(c => c.value);
+    const maxUnits = parseInt(row.querySelector('input[type="number"]').value, 10) || 24;
+    const avail = Array.from(row.querySelectorAll('.avail-checkboxes input:checked')).map(c => c.value);
 
-  // Toggle: if every checkbox is already checked → uncheck all; otherwise check all
-  const allChecked = checkboxes.every(cb => cb.checked);
-  checkboxes.forEach(cb => { cb.checked = !allChecked; });
-  saveFacultyToStorage();
-  updateSelectAllBtnState(day);
+    return {
+      name,
+      specialization: specs,
+      max_units: maxUnits,
+      absolute_max_units: maxUnits + 6, // Buffer margin limit definition mapping metric rules
+      availability: avail
+    };
+  }).filter(f => f.name);
 }
 
-
-function saveFacultyToStorage() {
+function saveFaculty() {
   try {
     localStorage.setItem('facultyData', JSON.stringify(getFacultyFromTable()));
     updateAllSelectAllBtnStates();
@@ -968,105 +843,83 @@ function initFacultyManagement() {
 
   // Reposition on scroll/resize - keeps fixed dropdown aligned with button
   const reposition = () => {
-    document.querySelectorAll('.multi-select-dropdown.open').forEach(d => {
-      const btn = d.querySelector('.dropdown-btn');
-      const content = d.querySelector('.dropdown-content');
-      if (!btn || !content) return;
-      const rect = btn.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const panelH = Math.min(260, spaceBelow - 8);
-      content.style.top  = (rect.bottom + 4) + 'px';
-      content.style.left = rect.left + 'px';
-      content.style.maxHeight = Math.max(120, panelH) + 'px';
-    });
+    document.querySelectorAll('.multi-select-dropdown.open').forEach(repositionDropdown);
   };
-  document.querySelectorAll('.panel').forEach(p =>
-    p.addEventListener('scroll', reposition, { passive: true })
-  );
-  window.addEventListener('resize', reposition, { passive: true });
+  window.addEventListener('scroll', reposition, true);
+  window.addEventListener('resize', reposition);
 }
 
 /* ============================================================
-   11. SUBJECTS MANAGEMENT
+   10. SUBJECTS MANAGEMENT SYSTEM
    ============================================================ */
-function addSubjectRow(subject = {}) {
+function addSubjectRow(data = {}) {
   const tbody = document.querySelector('#subjectsTable tbody');
   if (!tbody) return;
 
-  const row = document.createElement('tr');
-  row.innerHTML = `
+  const tr = document.createElement('tr');
+
+  const year     = data.year || '1st Year';
+  const semester = data.semester || '1st Semester';
+  const name     = data.name || '';
+  const type     = data.type || 'Software';
+  const lec      = data.lec_units !== undefined ? data.lec_units : 2;
+  const lab      = data.lab_units !== undefined ? data.lab_units : 1;
+
+  tr.innerHTML = `
     <td>
       <select class="subject-year">
-        <option value="1st Year">1st Year</option>
-        <option value="2nd Year">2nd Year</option>
-        <option value="3rd Year">3rd Year</option>
+        <option ${year==='1st Year'?'selected':''}>1st Year</option>
+        <option ${year==='2nd Year'?'selected':''}>2nd Year</option>
+        <option ${year==='3rd Year'?'selected':''}>3rd Year</option>
+        <option ${year==='4th Year'?'selected':''}>4th Year</option>
       </select>
     </td>
     <td>
       <select class="subject-semester">
-        <option value="1st Semester">1st Semester</option>
-        <option value="2nd Semester">2nd Semester</option>
+        <option ${semester==='1st Semester'?'selected':''}>1st Semester</option>
+        <option ${semester==='2nd Semester'?'selected':''}>2nd Semester</option>
+        <option ${semester==='Summer'?'selected':''}>Summer</option>
       </select>
     </td>
-    <td><input type="text" class="subject-name" placeholder="Subject name"></td>
+    <td><input type="text" class="subject-name" placeholder="Subject Title" value="${escapeAttr(name)}"></td>
     <td>
       <select class="subject-type">
-        <option value="Software">Software</option>
-        <option value="Database">Database</option>
-        <option value="Networking">Networking</option>
-        <option value="Elective">Elective</option>
+        <option ${type==='Software'?'selected':''}>Software</option>
+        <option ${type==='Database'?'selected':''}>Database</option>
+        <option ${type==='Networking'?'selected':''}>Networking</option>
+        <option ${type==='Elective'?'selected':''}>Elective</option>
       </select>
     </td>
-    <td><input type="number" class="lec" min="0"></td>
-    <td><input type="number" class="lab" min="0"></td>
-    <td class="total-hours">0</td>
-    <td><button type="button" class="btn-delete btn">Delete</button></td>
+    <td><input type="number" class="unit-input lec" value="${lec}" min="0" max="10"></td>
+    <td><input type="number" class="unit-input lab" value="${lab}" min="0" max="10"></td>
+    <td><button type="button" class="btn-delete row-action-btn" title="Delete Row">×</button></td>
   `;
 
-  // Set values
-  row.querySelector('.subject-year').value     = subject.year || '1st Year';
-  row.querySelector('.subject-semester').value = subject.semester || '1st Semester';
-  row.querySelector('.subject-name').value     = subject.name || '';
-  row.querySelector('.subject-type').value     = subject.type || 'Software';
-  row.querySelector('.lec').value              = subject.lec_units ?? 0;
-  row.querySelector('.lab').value              = subject.lab_units ?? 0;
-
-  const lecInput  = row.querySelector('.lec');
-  const labInput  = row.querySelector('.lab');
-  const totalCell = row.querySelector('.total-hours');
-
-  const updateTotal = () => {
-    totalCell.textContent = (parseInt(lecInput.value) || 0) + (parseInt(labInput.value) || 0);
-    saveSubjects();
-  };
-
-  lecInput.addEventListener('input', updateTotal);
-  labInput.addEventListener('input', updateTotal);
-  updateTotal();
-
-  row.querySelector('.btn-delete').addEventListener('click', () => {
-    row.remove();
-    saveSubjects();
-    renderSubjectsGrouped();
+  // Dynamic change tracker loops listeners attachments
+  tr.querySelectorAll('select, input').forEach(el => {
+    el.addEventListener('change', saveSubjects);
+    if(el.tagName === 'INPUT') {
+      el.addEventListener('input', debounce(saveSubjects, 500));
+    }
   });
 
-  row.querySelectorAll('select, input[type="text"]').forEach(el => {
-    el.addEventListener('change', () => { saveSubjects(); renderSubjectsGrouped(); });
+  tr.querySelector('.btn-delete').addEventListener('click', () => {
+    tr.remove();
+    saveSubjects();
   });
 
-  tbody.appendChild(row);
+  tbody.appendChild(tr);
 }
 
 function getSubjectsFromTable() {
   return Array.from(document.querySelectorAll('#subjectsTable tbody tr')).map(row => ({
-    year:      row.querySelector('.subject-year')?.value || '',
-    semester:  row.querySelector('.subject-semester')?.value || '',
-    name:      row.querySelector('.subject-name')?.value || '',
-    type:      row.querySelector('.subject-type')?.value || '',
-    lec_units: Number(row.querySelector('.lec')?.value || 0),
-    lab_units: Number(row.querySelector('.lab')?.value || 0),
-    hours:     (Number(row.querySelector('.lec')?.value || 0)) +
-               (Number(row.querySelector('.lab')?.value || 0) * 3)
+    year:     row.querySelector('.subject-year')?.value || '',
+    semester: row.querySelector('.subject-semester')?.value || '',
+    name:     row.querySelector('.subject-name')?.value || '',
+    type:     row.querySelector('.subject-type')?.value || '',
+    lec_units:Number(row.querySelector('.lec')?.value || 0),
+    lab_units:Number(row.querySelector('.lab')?.value || 0),
+    hours:    (Number(row.querySelector('.lec')?.value || 0)) + (Number(row.querySelector('.lab')?.value || 0) * 3)
   }));
 }
 
@@ -1092,40 +945,53 @@ function renderSubjectsGrouped() {
   if (!container) return;
 
   const subjects = getSubjectsFromTable().filter(s => s.name);
-  const grouped  = {};
+  const grouped = {};
 
-  subjects.forEach(sub => {
-    const key = `${sub.year} – ${sub.semester}`;
+  subjects.forEach(s => {
+    const key = `${s.year} - ${s.semester}`;
     if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(sub);
+    grouped[key].push(s);
   });
 
-  container.innerHTML = '';
+  if (!Object.keys(grouped).length) {
+    container.innerHTML = '<p class="empty-state-msg">No subjects mapped yet. Populate the table configuration list layout profile.</p>';
+    return;
+  }
 
-  Object.entries(grouped).forEach(([key, items]) => {
-    const div = document.createElement('div');
-    div.innerHTML = `
-      <h3>${escapeHTML(key)}</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th><th>Type</th><th>Lec</th><th>Lab</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${items.map(s => `
-            <tr>
-              <td>${escapeHTML(s.name)}</td>
-              <td>${escapeHTML(s.type)}</td>
-              <td>${s.lec_units}</td>
-              <td>${s.lab_units}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
+  let html = '<div class="curriculum-grid">';
+  Object.keys(grouped).sort().forEach(key => {
+    html += `
+      <div class="curriculum-card">
+        <div class="curriculum-header">${escapeHTML(key)}</div>
+        <div class="curriculum-body">
+          <table class="curriculum-table">
+            <thead>
+              <tr>
+                <th>Subject Name</th>
+                <th>Type</th>
+                <th class="txt-center">Lec</th>
+                <th class="txt-center">Lab</th>
+                <th class="txt-center">Hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${grouped[key].map(s => `
+                <tr>
+                  <td><strong>${escapeHTML(s.name)}</strong></td>
+                  <td><span class="type-tag ${s.type.toLowerCase()}">${escapeHTML(s.type)}</span></td>
+                  <td class="txt-center">${s.lec_units}</td>
+                  <td class="txt-center">${s.lab_units}</td>
+                  <td class="txt-center font-mono">${s.hours}h</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
     `;
-    container.appendChild(div);
   });
+  html += '</div>';
+  container.innerHTML = html;
 }
 
 function initSubjectsManagement() {
@@ -1139,60 +1005,9 @@ function initSubjectsManagement() {
 }
 
 /* ============================================================
-   11b. TIMETABLE RENDER
+   11. DASHBOARD OVERVIEW ASSIGNMENT STREAM
    ============================================================ */
-function renderTimetable(data) {
-  const container = document.getElementById('facultyTimetableContainer');
-  if (!container) return;
-
-  const TIME_SLOTS = ['7-9', '9-11', '11-13', '13-15', '15-17', '17-19'];
-  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-  // Build lookup: "Day-time" -> [{faculty, subject}]
-  const lookup = {};
-  data.forEach(item => {
-    const parts = item.slot.split(':');
-    const day  = parts[0].trim();
-    const time = (parts[1] || '').trim();
-    const key  = `${day}-${time}`;
-    if (!lookup[key]) lookup[key] = [];
-    lookup[key].push({ faculty: item.faculty, subject: item.subject });
-  });
-
-  let html = '<div class="timetable-scroll"><table class="timetable-grid"><thead><tr>';
-  html += '<th class="tt-time-col">Time</th>';
-  DAYS.forEach(d => { html += `<th class="tt-day-col tt-hd-${d}">${d}</th>`; });
-  html += '</tr></thead><tbody>';
-
-  TIME_SLOTS.forEach(slot => {
-    html += `<tr><td class="tt-time-label">${slot}</td>`;
-    DAYS.forEach(day => {
-      const key = `${day}-${slot}`;
-      const entries = lookup[key] || [];
-      if (entries.length === 0) {
-        html += `<td class="tt-cell tt-empty"></td>`;
-      } else {
-        html += `<td class="tt-cell tt-filled tt-bg-${day}">`;
-        entries.forEach(e => {
-          html += `<div class="tt-entry">
-            <div class="tt-faculty-tag">${escapeHTML(e.faculty)}</div>
-            <div class="tt-subject-tag">${escapeHTML(e.subject)}</div>
-          </div>`;
-        });
-        html += `</td>`;
-      }
-    });
-    html += '</tr>';
-  });
-
-  html += '</tbody></table></div>';
-  container.innerHTML = html;
-}
-
-/* ============================================================
-   11c. DASHBOARD FACULTY SUBJECT SUMMARY
-   ============================================================ */
-function renderFacultySubjectsSummary(data) {
+function renderDashboardAssignments(data) {
   const container = document.getElementById('dashboardFacultyAssignments');
   if (!container) return;
 
@@ -1213,96 +1028,33 @@ function renderFacultySubjectsSummary(data) {
     const subjects = Array.from(byFaculty[faculty]);
     const units = (data.filter(d => d.faculty === faculty).length) * 2;
     const colorClass = units > MAX_UNITS ? 'units-over' : units === MAX_UNITS ? 'units-max' : 'units-ok';
-    html += `<div class="fac-assign-card">
-      <div class="fac-assign-header">
-        <span class="fac-assign-avatar">${escapeHTML(faculty.charAt(0))}</span>
-        <span class="fac-assign-name">${escapeHTML(faculty)}</span>
-        <span class="units-badge ${colorClass}">${units}u</span>
+
+    html += `
+      <div class="fac-assign-card">
+        <div class="fac-assign-header">
+          <span class="fac-assign-avatar">${escapeHTML(faculty.charAt(0))}</span>
+          <span class="fac-assign-name">${escapeHTML(faculty)}</span>
+          <span class="units-badge ${colorClass}">${units}u</span>
+        </div>
+        <div class="fac-assign-body">
+          <ul class="fac-assign-list">
+            ${subjects.map(s => `
+              <li>
+                <span class="dot"></span>
+                <span class="name" title="${escapeAttr(s)}">${escapeHTML(s)}</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
       </div>
-      <div class="fac-assign-chips">
-        ${subjects.map(s => `<span class="subject-chip">${escapeHTML(s)}</span>`).join('')}
-      </div>
-    </div>`;
+    `;
   });
   html += '</div>';
   container.innerHTML = html;
 }
 
 /* ============================================================
-   11d. EDIT MODAL
-   ============================================================ */
-function openEditModal(facultyName) {
-  const modal    = document.getElementById('editModal');
-  const nameInp  = document.getElementById('editFacultyName');
-  const maxInp   = document.getElementById('editMaxUnits');
-  const title    = document.getElementById('editModalTitle');
-  if (!modal) return;
-
-  // Find stored max units
-  const stored = loadFacultyFromStorage() || INITIAL_FACULTY;
-  const fac = stored.find(f => f.name === facultyName);
-
-  if (title)   title.textContent = `Edit: ${facultyName}`;
-  if (nameInp) nameInp.value = facultyName;
-  if (maxInp)  maxInp.value  = fac ? (fac.absolute_max_units || fac.max_units || 30) : 30;
-
-  modal.classList.add('open');
-  modal.setAttribute('aria-hidden', 'false');
-  setTimeout(() => maxInp && maxInp.focus(), 120);
-}
-
-function closeEditModal() {
-  const modal = document.getElementById('editModal');
-  if (modal) {
-    modal.classList.remove('open');
-    modal.setAttribute('aria-hidden', 'true');
-  }
-}
-
-function initEditModal() {
-  const modal     = document.getElementById('editModal');
-  const closeBtn  = document.getElementById('editModalClose');
-  const cancelBtn = document.getElementById('editModalCancel');
-  const saveBtn   = document.getElementById('editModalSave');
-
-  closeBtn?.addEventListener('click',  closeEditModal);
-  cancelBtn?.addEventListener('click', closeEditModal);
-  modal?.addEventListener('click', e => { if (e.target === modal) closeEditModal(); });
-
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeEditModal();
-  });
-
-  saveBtn?.addEventListener('click', () => {
-    const facultyName = document.getElementById('editFacultyName')?.value;
-    const newMax = parseInt(document.getElementById('editMaxUnits')?.value) || 30;
-    if (!facultyName) return;
-
-    // Update the faculty table row
-    document.querySelectorAll('#facultyInputTable tbody tr').forEach(row => {
-      const nameEl = row.querySelector('td:nth-child(1) input[type="text"]');
-      if (nameEl && nameEl.value.trim() === facultyName) {
-        const maxEl = row.querySelector('td:nth-child(3) input[type="number"]');
-        if (maxEl) maxEl.value = newMax;
-      }
-    });
-
-    saveFacultyToStorage();
-    closeEditModal();
-    showToast(`✓ Updated ${facultyName}'s max units → ${newMax}`);
-  });
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toastNotif');
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2800);
-}
-
-/* ============================================================
-   12. EXPORT FUNCTIONS
+   12. EXPORT AND PRINT UTILITIES (CSV / PRINT REPORT EXPORTS)
    ============================================================ */
 function initExports() {
   const csvBtn = document.getElementById('exportCSV');
@@ -1310,10 +1062,17 @@ function initExports() {
 
   if (csvBtn) {
     csvBtn.addEventListener('click', () => {
-      const rows = Array.from(document.querySelectorAll('#reportsSummaryTable tr'));
-      const csv  = rows.map(r =>
-        Array.from(r.children).map(td => `"${td.innerText.replace(/"/g, '""')}"`).join(',')
+      if (!lastGAResult || !lastGAResult.length) {
+        alert('Run the optimization framework engine first before exporting data records.');
+        return;
+      }
+      const headers = ['Faculty Member', 'Subject Title', 'Classification Type', 'Schedule Slot Assigned'];
+      const rows = Array.from(document.querySelectorAll('#gaResultsTable tbody tr'));
+      
+      const csv = [headers.join(',')].concat(
+        rows.map(r => Array.from(r.children).map(td => `"${td.innerText.replace(/"/g, '""')}"`).join(','))
       ).join('\n');
+
       downloadFile(csv, 'atlas_psu_reports.csv', 'text/csv');
     });
   }
@@ -1329,15 +1088,22 @@ function generatePrintReport() {
     return;
   }
 
-  const dept     = sessionStorage.getItem('atlasDept') || 'IT';
-  const user     = sessionStorage.getItem('atlasUser') || 'Administrator';
-  const deptMap  = { IT:'Information Technology', CS:'Computer Science', MB:'Marine Biology', ES:'Environmental Science', MedB:'Medical Biology' };
+  const dept = sessionStorage.getItem('atlasDept') || 'IT';
+  const user = sessionStorage.getItem('atlasUser') || 'Administrator';
+  const deptMap = {
+    IT:   'Information Technology',
+    CS:   'Computer Science',
+    MB:   'Marine Biology',
+    ES:   'Environmental Science',
+    MedB: 'Medical Biology'
+  };
   const deptFull = deptMap[dept] || dept;
-  const now      = new Date();
-  const dateStr  = now.toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' });
-  const timeStr  = now.toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' });
 
-  // ── Build faculty load data ──────────────────────────────────
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+  const timeStr = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+
+  // Compute breakdown mapping metric profiles internally
   const byFaculty = {};
   lastGAResult.forEach(item => {
     if (!item.faculty) return;
@@ -1345,455 +1111,426 @@ function generatePrintReport() {
     byFaculty[item.faculty].push(item);
   });
 
-  // ── Fairness metrics (re-compute inline) ────────────────────
-  const loadMap = {};
-  lastGAResult.forEach(i => { if (i.faculty) loadMap[i.faculty] = (loadMap[i.faculty]||0)+2; });
-  const loads = Object.values(loadMap);
-  const n = loads.length || 1;
-  const mean = loads.reduce((a,b)=>a+b,0)/n;
-  const stdDev = Math.sqrt(loads.reduce((s,v)=>s+(v-mean)**2,0)/n);
-  const sumX = loads.reduce((a,b)=>a+b,0);
-  const sumX2 = loads.reduce((a,b)=>a+b*b,0);
-  const jain = sumX2===0 ? 1 : (sumX*sumX)/(n*sumX2);
+  const facultyRows = Object.keys(byFaculty).sort().map(facName => {
+    const items = byFaculty[facName];
+    const units = items.length * 2;
+    const subjectsList = Array.from(new Set(items.map(i => i.subject))).join(', ');
+    const loadStatus = units > MAX_UNITS ? 'OVERLOAD' : units === MAX_UNITS ? 'MAX LOAD' : 'NORMAL';
+    return `
+      <tr>
+        <td><strong>${escapeHTML(facName)}</strong></td>
+        <td class="txt-center font-mono">${units} u</td>
+        <td><span class="print-status-tag ${loadStatus.toLowerCase().replace(' ', '')}">${loadStatus}</span></td>
+        <td>${escapeHTML(subjectsList)}</td>
+      </tr>
+    `;
+  }).join('');
 
-  // ── Status badge helper ──────────────────────────────────────
-  function loadBadge(units) {
-    if (units > MAX_UNITS) return `<span class="badge badge-over">${units} units (OVERLOAD)</span>`;
-    if (units === MAX_UNITS) return `<span class="badge badge-max">${units} units (MAX)</span>`;
-    return `<span class="badge badge-ok">${units} units</span>`;
-  }
+  const scheduleRows = [...lastGAResult].sort((a, b) => {
+    const ps = s => {
+      const [d, t] = s.split(':');
+      return (DAY_ORDER[d.trim()] * 100) + parseInt(t || '0');
+    };
+    return ps(a.slot) - ps(b.slot);
+  }).map(item => `
+    <tr>
+      <td class="font-mono"><strong>${escapeHTML(item.slot)}</strong></td>
+      <td>${escapeHTML(item.subject)}</td>
+      <td><span class="type-tag ${item.type.toLowerCase()}">${escapeHTML(item.type)}</span></td>
+      <td><strong>${escapeHTML(item.faculty)}</strong></td>
+    </tr>
+  `).join('');
 
-  // ── Faculty table rows ───────────────────────────────────────
-  let facultyRows = '';
-  let rowNum = 1;
-  Object.keys(byFaculty).sort().forEach(name => {
-    const items = byFaculty[name];
-    const total = items.length * 2;
-    const overload = total > MAX_UNITS;
-    const atMax    = total === MAX_UNITS;
+  // Extract analytics stats directly safely
+  const fScore  = document.getElementById('fairnessScore').textContent;
+  const fJain   = document.getElementById('fairnessJain').textContent;
+  const fMatch  = document.getElementById('fairnessMatchRate').textContent;
+  const fStdDev = document.getElementById('fairnessStdDev').textContent;
 
-    items.forEach((item, idx) => {
-      const day  = item.slot.split(':')[0].trim();
-      const bgRow = rowNum % 2 === 0 ? 'style="background:#f8faff"' : '';
-      if (idx === 0) {
-        facultyRows += `
-        <tr ${bgRow}>
-          <td rowspan="${items.length}" class="faculty-cell ${overload?'cell-over':atMax?'cell-max':''}">
-            <div class="faculty-avatar-print">${escapeHTML(name.charAt(0))}</div>
-            <strong>${escapeHTML(name)}</strong>
-          </td>
-          <td><span class="subj">${escapeHTML(item.subject)}</span><span class="slot-tag slot-${escapeHTML(day)}">${escapeHTML(item.slot)}</span></td>
-          <td rowspan="${items.length}" class="units-cell">${loadBadge(total)}</td>
-        </tr>`;
-      } else {
-        facultyRows += `<tr ${bgRow}><td><span class="subj">${escapeHTML(item.subject)}</span><span class="slot-tag slot-${escapeHTML(day)}">${escapeHTML(item.slot)}</span></td></tr>`;
-      }
-      if (idx === items.length - 1) rowNum++;
-    });
-  });
-
-  const jainColor = jain >= 0.9 ? '#16a34a' : jain >= 0.75 ? '#d97706' : '#dc2626';
-  const sdColor   = stdDev <= 4  ? '#16a34a' : stdDev <= 8  ? '#d97706' : '#dc2626';
-
-  const html = `<!DOCTYPE html>
+  const html = `
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>ATLAS PSU | Faculty Load Report</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  <meta charset="UTF-8">
+  <title>ATLAS PSU - Teaching Load Optimization Report</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      font-size: 10.5pt;
+      color: #1e293b;
+      background: #fff;
+      line-height: 1.5;
+    }
+    /* ── COVER PAGE ── */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 60px 48px;
+      background: linear-gradient(145deg, #1a0a04 0%, #6b2106 55%, #c0440a 100%);
+      color: #fff;
+      page-break-after: always;
+    }
+    .cover-logo {
+      width: 72px;
+      height: 72px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+      font-size: 24pt;
+      font-weight: bold;
+    }
+    .cover h1 {
+      font-size: 28pt;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 12px;
+    }
+    .cover .subtitle {
+      font-size: 14pt;
+      opacity: 0.9;
+      margin-bottom: 48px;
+      font-weight: 400;
+    }
+    .cover-meta {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      max-width: 500px;
+      width: 100%;
+      text-align: left;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .cover-meta-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .cover-meta-label {
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      opacity: 0.6;
+      margin-bottom: 4px;
+    }
+    .cover-meta-value {
+      font-size: 11pt;
+      font-weight: 600;
+    }
 
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* ── REPORT CONTENT STYLES ── */
+    .page {
+      padding: 50px 60px;
+      page-break-after: always;
+    }
+    .page:last-child {
+      page-break-after: avoid;
+    }
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 12px;
+      margin-bottom: 30px;
+    }
+    .page-header h2 {
+      font-size: 14pt;
+      font-weight: 700;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .page-header .page-meta {
+      font-size: 9pt;
+      color: #64748b;
+    }
+    h3 {
+      font-size: 12pt;
+      color: #0f172a;
+      margin-bottom: 16px;
+      font-weight: 700;
+    }
 
-  body {
-    font-family: 'Inter', Arial, sans-serif;
-    font-size: 10.5pt;
-    color: #1e293b;
-    background: #fff;
-    line-height: 1.5;
-  }
+    /* ── ANALYTICS CARDS ── */
+    .fairness-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 32px;
+    }
+    .fairness-item {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 16px;
+      background: #f8fafc;
+    }
+    .fairness-item .f-label {
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #64748b;
+      font-weight: 600;
+    }
+    .fairness-item .f-value {
+      font-size: 22pt;
+      font-weight: 700;
+      margin: 4px 0 2px;
+      line-height: 1;
+    }
+    .fairness-item .f-sub {
+      font-size: 8pt;
+      color: #94a3b8;
+    }
 
-  /* ── COVER PAGE ── */
-  .cover {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    padding: 60px 48px;
-    background: linear-gradient(145deg, #1a0a04 0%, #6b2106 55%, #c0440a 100%);
-    color: #fff;
-    page-break-after: always;
-  }
-  .cover-logo {
-    width: 72px; height: 72px;
-    background: rgba(255,255,255,0.15);
-    border-radius: 18px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 32px; font-weight: 800;
-    margin: 0 auto 28px;
-    letter-spacing: -1px;
-    border: 2px solid rgba(255,255,255,0.25);
-  }
-  .cover h1 { font-size: 28pt; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 10px; }
-  .cover .subtitle { font-size: 13pt; opacity: 0.75; margin-bottom: 40px; font-weight: 400; }
-  .cover-meta {
-    display: flex; gap: 32px; justify-content: center; flex-wrap: wrap;
-    border-top: 1px solid rgba(255,255,255,0.2);
-    padding-top: 28px; margin-top: 8px;
-  }
-  .cover-meta-item { display: flex; flex-direction: column; gap: 4px; }
-  .cover-meta-label { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.55; }
-  .cover-meta-value { font-size: 11pt; font-weight: 600; }
-  .cover-badge {
-    display: inline-block;
-    background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(255,255,255,0.25);
-    border-radius: 999px;
-    padding: 4px 16px;
-    font-size: 9pt;
-    letter-spacing: 0.05em;
-    margin-bottom: 32px;
-    font-weight: 500;
-  }
+    /* ── FACULTY TABLE ── */
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5pt;
+      margin-bottom: 24px;
+    }
+    .report-table thead tr {
+      background: #1a0a04;
+      color: #fff;
+    }
+    .report-table th {
+      padding: 10px 12px;
+      font-weight: 600;
+      text-align: left;
+      font-size: 9pt;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .report-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #334155;
+    }
+    .report-table tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    .txt-center { text-align: center !important; }
+    .font-mono { font-family: 'JetBrains Mono', Consolas, monospace; }
 
-  /* ── PAGE WRAPPER ── */
-  .page { padding: 44px 52px; }
-  .page-break { page-break-before: always; }
+    /* Tags */
+    .print-status-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 8pt;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .print-status-tag.normal { background: #dcfce7; color: #15803d; }
+    .print-status-tag.maxload { background: #fef3c7; color: #b45309; }
+    .print-status-tag.overload { background: #fee2e2; color: #b91c1c; }
 
-  /* ── SECTION HEADER ── */
-  .section-header {
-    display: flex; align-items: center; gap: 12px;
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 2px solid #e2e8f0;
-  }
-  .section-icon {
-    width: 36px; height: 36px; border-radius: 9px;
-    background: #c0440a; color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px; font-weight: 700; flex-shrink: 0;
-  }
-  .section-title { font-size: 14pt; font-weight: 700; color: #1a0a04; }
-  .section-sub   { font-size: 9pt; color: #64748b; margin-top: 1px; }
+    .type-tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 7.5pt;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .type-tag.software { background: #e0f2fe; color: #0369a1; }
+    .type-tag.database { background: #f3e8ff; color: #6b21a8; }
+    .type-tag.networking { background: #e2e8f0; color: #475569; }
+    .type-tag.elective { background: #fef3c7; color: #d97706; }
 
-  /* ── METRICS GRID ── */
-  .metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
-    margin-bottom: 32px;
-  }
-  .metric-card {
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 14px 16px 12px;
-    background: #f8fafc;
-  }
-  .metric-card.accent { border-left: 3px solid #c0440a; background: #fde8d8; }
-  .metric-label { font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; font-weight: 600; margin-bottom: 4px; }
-  .metric-value { font-size: 19pt; font-weight: 700; color: #1a0a04; line-height: 1; }
-  .metric-sub   { font-size: 8pt; color: #94a3b8; margin-top: 4px; }
+    /* ── SIGNATURE STAMPS ── */
+    .sign-zone {
+      margin-top: 60px;
+      display: flex;
+      justify-content: space-between;
+      page-break-inside: avoid;
+    }
+    .sign-block {
+      width: 240px;
+      text-align: center;
+    }
+    .sign-line {
+      border-top: 1px solid #94a3b8;
+      margin-top: 45px;
+      margin-bottom: 6px;
+    }
+    .sign-title {
+      font-size: 9pt;
+      color: #64748b;
+    }
 
-  /* ── FAIRNESS SECTION ── */
-  .fairness-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
-    margin-bottom: 32px;
-  }
-  .fairness-item {
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 14px 16px;
-    background: #f8fafc;
-  }
-  .fairness-item .f-label { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.07em; color: #64748b; font-weight: 600; }
-  .fairness-item .f-value { font-size: 22pt; font-weight: 700; margin: 4px 0 2px; line-height: 1; }
-  .fairness-item .f-sub   { font-size: 8pt; color: #94a3b8; }
-
-  /* ── FACULTY TABLE ── */
-  .report-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 9.5pt;
-    margin-bottom: 24px;
-  }
-  .report-table thead tr {
-    background: #1a0a04;
-    color: #fff;
-  }
-  .report-table th {
-    padding: 10px 12px;
-    text-align: left;
-    font-size: 8pt;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    font-weight: 600;
-  }
-  .report-table td {
-    padding: 9px 12px;
-    vertical-align: top;
-    border-bottom: 1px solid #e9edf3;
-  }
-  .faculty-cell {
-    vertical-align: middle;
-    font-weight: 500;
-    width: 22%;
-    border-right: 1px solid #e9edf3;
-  }
-  .faculty-cell.cell-over { border-left: 3px solid #dc2626; }
-  .faculty-cell.cell-max  { border-left: 3px solid #d97706; }
-  .faculty-avatar-print {
-    display: inline-flex;
-    align-items: center; justify-content: center;
-    width: 28px; height: 28px;
-    border-radius: 50%;
-    background: #c0440a;
-    color: #fff;
-    font-size: 11pt;
-    font-weight: 700;
-    margin-right: 8px;
-    vertical-align: middle;
-    flex-shrink: 0;
-  }
-  .units-cell { text-align: center; vertical-align: middle; width: 22%; }
-  .subj { display: inline; font-weight: 500; }
-  .slot-tag {
-    display: inline-block;
-    margin-left: 6px;
-    padding: 1px 7px;
-    border-radius: 999px;
-    font-size: 7.5pt;
-    font-weight: 600;
-    background: #e2e8f0;
-    color: #475569;
-    white-space: nowrap;
-  }
-  .slot-Mon,.slot-Tue,.slot-Wed { background:#fde8d8; color:#963309; }
-  .slot-Thu,.slot-Fri          { background:#d1fae5; color:#065f46; }
-  .slot-Sat                    { background:#ede9fe; color:#5b21b6; }
-
-  .badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 8pt;
-    font-weight: 600;
-  }
-  .badge-ok   { background:#dcfce7; color:#15803d; }
-  .badge-max  { background:#fef3c7; color:#b45309; }
-  .badge-over { background:#fee2e2; color:#b91c1c; }
-
-  /* ── FOOTER ── */
-  .report-footer {
-    margin-top: 48px;
-    padding-top: 16px;
-    border-top: 1px solid #e2e8f0;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    font-size: 8pt;
-    color: #94a3b8;
-  }
-  .sig-line {
-    width: 200px;
-    border-bottom: 1px solid #475569;
-    margin-bottom: 4px;
-    height: 32px;
-  }
-  .sig-label { font-size: 8pt; color: #64748b; font-weight: 500; }
-
-  /* ── CHED note ── */
-  .ched-note-print {
-    background: #fde8d8;
-    border-left: 3px solid #c0440a;
-    border-radius: 5px;
-    padding: 8px 12px;
-    font-size: 8.5pt;
-    color: #6b2106;
-    margin-bottom: 24px;
-  }
-
-  @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .no-print { display: none !important; }
-  }
-</style>
+    @media print {
+      body { background: #fff; color: #000; }
+      .cover { min-height: 100vh; }
+    }
+  </style>
 </head>
 <body>
 
-<!-- ══════════════ COVER PAGE ══════════════ -->
-<div class="cover">
-  <div class="cover-logo">A</div>
-  <div class="cover-badge">Automated Teaching Load Assignment System</div>
-  <h1>Faculty Load Report</h1>
-  <p class="subtitle">Palawan State University, ${escapeHTML(deptFull)} Department</p>
-  <div class="cover-meta">
-    <div class="cover-meta-item">
-      <span class="cover-meta-label">Generated</span>
-      <span class="cover-meta-value">${dateStr}</span>
-    </div>
-    <div class="cover-meta-item">
-      <span class="cover-meta-label">Time</span>
-      <span class="cover-meta-value">${timeStr}</span>
-    </div>
-    <div class="cover-meta-item">
-      <span class="cover-meta-label">Prepared by</span>
-      <span class="cover-meta-value">${escapeHTML(user)}</span>
-    </div>
-    <div class="cover-meta-item">
-      <span class="cover-meta-label">Faculty Count</span>
-      <span class="cover-meta-value">${Object.keys(byFaculty).length}</span>
-    </div>
-    <div class="cover-meta-item">
-      <span class="cover-meta-label">Total Assignments</span>
-      <span class="cover-meta-value">${lastGAResult.length}</span>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════ PAGE 2: SUMMARY + FAIRNESS ══════════════ -->
-<div class="page page-break">
-
-  <!-- Summary metrics -->
-  <div class="section-header">
-    <div class="section-icon">📊</div>
-    <div>
-      <div class="section-title">Workload Summary</div>
-      <div class="section-sub">Aggregate load statistics across all faculty members</div>
+  <div class="cover">
+    <div class="cover-logo">A</div>
+    <h1>Teaching Load Assignment<br>Optimization Analysis Report</h1>
+    <p class="subtitle">Palawan State University, ${escapeHTML(deptFull)} Department</p>
+    
+    <div class="cover-meta">
+      <div class="cover-meta-item">
+        <span class="cover-meta-label">Generated</span>
+        <span class="cover-meta-value">${dateStr}</span>
+      </div>
+      <div class="cover-meta-item">
+        <span class="cover-meta-label">Time</span>
+        <span class="cover-meta-value">${timeStr}</span>
+      </div>
+      <div class="cover-meta-item">
+        <span class="cover-meta-label">Prepared by</span>
+        <span class="cover-meta-value">${escapeHTML(user)}</span>
+      </div>
+      <div class="cover-meta-item">
+        <span class="cover-meta-label">Faculty Count</span>
+        <span class="cover-meta-value">${Object.keys(byFaculty).length} members</span>
+      </div>
     </div>
   </div>
 
-  <div class="metrics-grid">
-    <div class="metric-card accent">
-      <div class="metric-label">Total Faculty</div>
-      <div class="metric-value">${Object.keys(byFaculty).length}</div>
-      <div class="metric-sub">assigned this period</div>
+  <div class="page">
+    <div class="page-header">
+      <h2>I. Executive Distribution Analytics</h2>
+      <span class="page-meta">ATLAS PSU Engine · Page 2</span>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">Total Assignments</div>
-      <div class="metric-value">${lastGAResult.length}</div>
-      <div class="metric-sub">subject-slot pairs</div>
+
+    <h3>Workload Balance Matrix</h3>
+    <div class="fairness-summary-grid">
+      <div class="fairness-item">
+        <div class="f-label">Overall Balance Score</div>
+        <div class="f-value">${fScore}</div>
+        <div class="f-sub">Combined GA targets</div>
+      </div>
+      <div class="fairness-item">
+        <div class="f-label">Jain's Index</div>
+        <div class="f-value">${fJain}</div>
+        <div class="f-sub">Equality metric (0-1)</div>
+      </div>
+      <div class="fairness-item">
+        <div class="f-label">Specialization Match</div>
+        <div class="f-value">${fMatch}</div>
+        <div class="f-sub">Domain placement</div>
+      </div>
+      <div class="fairness-item">
+        <div class="f-label">Load Std Deviation</div>
+        <div class="f-value">${fStdDev}</div>
+        <div class="f-sub">Spread index deviation</div>
+      </div>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">Avg Load / Faculty</div>
-      <div class="metric-value">${mean.toFixed(1)}</div>
-      <div class="metric-sub">units</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Overloaded Faculty</div>
-      <div class="metric-value" style="color:${loads.filter(v=>v>MAX_UNITS).length>0?'#dc2626':'#16a34a'}">${loads.filter(v=>v>MAX_UNITS).length}</div>
-      <div class="metric-sub">above ${MAX_UNITS} units</div>
+
+    <h3 style="margin-top: 20px;">Faculty Workload Status</h3>
+    <table class="report-table">
+      <thead>
+        <tr>
+          <th>Faculty Member</th>
+          <th class="txt-center" style="width: 100px;">Total Load</th>
+          <th style="width: 130px;">Status Tag</th>
+          <th>Subjects Pool Matrix Track</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${facultyRows}
+      </tbody>
+    </table>
+
+    <div class="sign-zone">
+      <div class="sign-block">
+        <div class="sign-line"></div>
+        <strong>${escapeHTML(user)}</strong><br>
+        <span class="sign-title">Department Chairperson</span>
+      </div>
+      <div class="sign-block">
+        <div class="sign-line"></div>
+        <strong>Dr. Jane Doe</strong><br>
+        <span class="sign-title">College Dean</span>
+      </div>
     </div>
   </div>
 
-  <!-- Fairness metrics -->
-  <div class="section-header">
-    <div class="section-icon">⚖</div>
-    <div>
-      <div class="section-title">Fairness Analysis</div>
-      <div class="section-sub">Computed via Jain's Fairness Index and load distribution metrics</div>
+  <div class="page">
+    <div class="page-header">
+      <h2>II. Master Schedule Allocations Matrix</h2>
+      <span class="page-meta">ATLAS PSU Engine · Page 3</span>
     </div>
+
+    <table class="report-table">
+      <thead>
+        <tr>
+          <th style="width: 180px;">Time Slot & Day</th>
+          <th>Subject Description Name Title</th>
+          <th style="width: 120px;">Domain Type</th>
+          <th>Assigned Professor</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${scheduleRows}
+      </tbody>
+    </table>
   </div>
 
-  <div class="fairness-grid">
-    <div class="fairness-item">
-      <div class="f-label">Jain's Fairness Index</div>
-      <div class="f-value" style="color:${jainColor}">${jain.toFixed(4)}</div>
-      <div class="f-sub">1.0000 = perfectly equal load distribution</div>
-    </div>
-    <div class="fairness-item">
-      <div class="f-label">Load Std. Deviation</div>
-      <div class="f-value" style="color:${sdColor}">${stdDev.toFixed(2)}</div>
-      <div class="f-sub">units; lower indicates more balanced assignments</div>
-    </div>
-    <div class="fairness-item">
-      <div class="f-label">Overall Fairness Score</div>
-      <div class="f-value" style="color:${jain>=0.85?'#16a34a':jain>=0.7?'#d97706':'#dc2626'}">${(jain*100).toFixed(1)}%</div>
-      <div class="f-sub">${jain>=0.85?'Good: load is well balanced':jain>=0.7?'Moderate: some variance detected':'Poor: significant imbalance found'}</div>
-    </div>
-  </div>
-
-  <div class="ched-note-print">
-    ℹ &nbsp;<strong>CHED Compliance:</strong> Standard teaching load is capped at <strong>24 units</strong>; overload maximum is <strong>30 units</strong>, per CHED Memorandum Order No. 40, s. 2006. Assignments highlighted in red exceed the standard load.
-  </div>
-
-</div>
-
-<!-- ══════════════ PAGE 3+: FACULTY ASSIGNMENTS ══════════════ -->
-<div class="page page-break">
-
-  <div class="section-header">
-    <div class="section-icon">👤</div>
-    <div>
-      <div class="section-title">Faculty Assignment Details</div>
-      <div class="section-sub">Complete subject and time-slot assignments per faculty member</div>
-    </div>
-  </div>
-
-  <table class="report-table">
-    <thead>
-      <tr>
-        <th>Faculty Member</th>
-        <th>Assigned Subjects &amp; Time Slots</th>
-        <th style="text-align:center">Total Load</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${facultyRows}
-    </tbody>
-  </table>
-
-  <div class="report-footer">
-    <div>
-      <div style="font-weight:600;color:#1a0a04;margin-bottom:4px;">ATLAS PSU | Automated Teaching Load Assignment System</div>
-      <div>Generated ${dateStr} at ${timeStr} | ${escapeHTML(deptFull)} Department | Palawan State University</div>
-      <div style="margin-top:6px;color:#cbd5e1;">Optimized using Genetic Algorithm | Load limits per CHED CMO No. 40, s. 2006</div>
-    </div>
-    <div style="text-align:right">
-      <div class="sig-line"></div>
-      <div class="sig-label">Department Chairperson Signature</div>
-    </div>
-  </div>
-
-</div>
-
-<script>
-  window.onload = () => { window.print(); };
-<\/script>
+  <script>
+    window.onload = function() {
+      window.print();
+    };
+  <\/script>
 </body>
 </html>`;
 
   const win = window.open('', '_blank', 'width=900,height=700');
-  if (!win) { alert('Please allow pop-ups to generate the PDF report.'); return; }
+  if (!win) {
+    alert('Please allow pop-ups to generate the PDF report.');
+    return;
+  }
   win.document.write(html);
   win.document.close();
 }
 
-function downloadFile(content, filename, mimeType) {
+function downloadFile(content, fileName, mimeType) {
+  const a = document.createElement('a');
   const blob = new Blob([content], { type: mimeType });
-  const link = document.createElement('a');
-  link.href  = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(link.href);
+  a.href = URL.createObjectURL(blob);
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 /* ============================================================
-   13. UTILITY FUNCTIONS
+   13. SANITIZATION & STRING ESCAPE UTILITIES
    ============================================================ */
 function escapeHTML(str) {
+  if (!str) return '';
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function escapeAttr(str) {
-  return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function debounce(fn, delay) {
@@ -1821,7 +1558,6 @@ window.addEventListener('DOMContentLoaded', () => {
   initFacultyManagement();
   initSubjectsManagement();
   initExports();
-  initEditModal();
 
   // Load faculty
   const savedFaculty = loadFacultyFromStorage();
@@ -1839,9 +1575,6 @@ window.addEventListener('DOMContentLoaded', () => {
   } else {
     DEFAULT_SUBJECTS.forEach(s => addSubjectRow(s));
   }
-
+  saveSubjects();
   renderSubjectsGrouped();
 });
-
-// Expose needed globals for inline HTML (legacy support)
-window.switchPanel = switchPanel;

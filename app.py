@@ -106,7 +106,7 @@ def build_static_lookup(subjects: list[dict]) -> None:
         name = subj.get("name", "").strip()
         if not name or name in STATIC_SPEC_LOOKUP:
             continue
-        
+            
         if name in ai_specialization_cache:
             STATIC_SPEC_LOOKUP[name] = ai_specialization_cache[name]
         else:
@@ -132,363 +132,192 @@ def can_take_more(prof: dict, current_load: int) -> bool:
 def is_eligible(prof: dict, subject_name: str, current_load: int, slot_key: str | None) -> bool:
     if not can_take_more(prof, current_load):
         return False
-
     if slot_key and get_slot_day(slot_key) not in prof.get("availability", []):
         return False
-
     if subject_name.startswith("IT Elective"):
         return True
-
-    required_specs = STATIC_SPEC_LOOKUP.get(subject_name, ["Information Technology (General Elective)"])
-    required = {s.strip().lower() for s in required_specs}
-    prof_specs = {s.strip().lower() for s in prof.get("specialization", [])}
-
-    return bool(required & prof_specs)
-
-def build_slot_key(day: str, start: int, end: int) -> str:
-    return f"{day}: {start}-{end}"
-
-def all_slot_keys() -> list[str]:
-    return [build_slot_key(d, s, e) for d, s, e in TIME_SLOTS]
-
-# ============================================================
-# GA CORE OPERATIONS
-# ============================================================
-def greedy_schedule(faculty: list[dict], subjects: list[dict]) -> list[dict]:
-    schedule = []
-    faculty_load  = {f["name"]: 0 for f in faculty}
-    faculty_slots = {f["name"]: set() for f in faculty}
-
-    sorted_subjects = sorted(subjects, key=lambda x: -x.get("hours", 2))
-
-    for subj in sorted_subjects:
-        remaining = subj.get("hours", 2)
-        attempts = 0
-
-        while remaining > 0 and attempts < 60:
-            attempts += 1
-
-            eligible = [
-                f for f in faculty
-                if is_eligible(f, subj["name"], faculty_load[f["name"]], None)
-            ]
-
-            if not eligible:
-                # FIX: Fallback matches availability constraints systematically
-                eligible = [f for f in faculty if can_take_more(f, faculty_load[f["name"]])]
-
-            if not eligible:
-                break
-
-            eligible.sort(key=lambda f: faculty_load[f["name"]])
-            
-            chosen = None
-            slot_key = None
-            
-            for prof in eligible:
-                free_slots = [
-                    sk for sk in all_slot_keys()
-                    if sk not in faculty_slots[prof["name"]]
-                    and get_slot_day(sk) in prof.get("availability", [])
-                ]
-                if free_slots:
-                    chosen = prof
-                    slot_key = random.choice(free_slots)
-                    break
-            
-            if not chosen or not slot_key:
-                break
-
-            schedule.append({
-                "faculty": chosen["name"],
-                "subject": subj["name"],
-                "type":    subj.get("type", "Software"),
-                "slot":    slot_key,
-            })
-
-            faculty_load[chosen["name"]] += 1
-            faculty_slots[chosen["name"]].add(slot_key)
-            remaining -= 1
-
-    return schedule
-
-def fitness(schedule: list[dict], faculty: list[dict]) -> float:
-    if not schedule:
-        return 0.0
-
-    faculty_load = {f["name"]: 0 for f in faculty}
-    spec_score   = 0.0
-    slot_conflicts = 0
-
-    faculty_by_name = {f["name"]: f for f in faculty}
-
-    for item in schedule:
-        fname = item["faculty"]
-        faculty_load[fname] = faculty_load.get(fname, 0) + 1
-
-        prof = faculty_by_name.get(fname)
-        if not prof:
-            continue
-
-        required = STATIC_SPEC_LOOKUP.get(item["subject"], ["Information Technology (General Elective)"])
-        prof_specs = {s.strip().lower() for s in prof.get("specialization", [])}
-        matches = sum(
-            1 for rs in required
-            if any(rs.lower() in ps or ps in rs.lower() for ps in prof_specs)
-        )
-        spec_score += (matches / len(required)) if required else 1.0
-
-    slot_usage = {}
-    for item in schedule:
-        key = (item["faculty"], item["slot"])
-        slot_usage[key] = slot_usage.get(key, 0) + 1
-        if slot_usage[key] > 1:
-            slot_conflicts += 1
-
-    loads = list(faculty_load.values())
-    mean_load = sum(loads) / len(loads) if loads else 0
-    load_variance = sum((l - mean_load) ** 2 for l in loads) / len(loads) if loads else 0
-
-    overload_penalty = sum(
-        max(0, faculty_load.get(f["name"], 0) - f["absolute_max_units"])
-        for f in faculty
-    ) * 10
-
-    n = len(schedule)
-    score = (
-        0.50 * (spec_score / n) +
-        0.20 * (1.0 - slot_conflicts / (n + 1)) +
-        0.20 * max(0.0, 1.0 - load_variance / 10) +
-        0.10 * 1.0
-    ) - overload_penalty / (n + 1)
-
-    return score
-
-def repair(schedule: list[dict], faculty: list[dict]) -> list[dict]:
-    faculty_load  = {f["name"]: 0 for f in faculty}
-    faculty_slots = {f["name"]: set() for f in faculty}
-    faculty_by_name = {f["name"]: f for f in faculty}
-
-    for item in schedule:
-        fname = item["faculty"]
-        slot  = item["slot"]
-
-        prof = faculty_by_name.get(fname)
-        if not prof:
-            continue
-
-        required_specs = STATIC_SPEC_LOOKUP.get(item["subject"], ["Information Technology (General Elective)"])
-        conflict = (
-            slot in faculty_slots[fname]
-            or faculty_load[fname] >= prof["absolute_max_units"]
-            or get_slot_day(slot) not in prof.get("availability", [])
-        )
-
-        if conflict:
-            eligible = sorted(
-                [p for p in faculty if is_eligible(p, item["subject"], faculty_load[p["name"]], None)],
-                key=lambda p: (
-                    -len(set(p.get("specialization", [])) & set(required_specs)),
-                    faculty_load[p["name"]]
-                )
-            )
-            if not eligible:
-                continue
-
-            new_prof = eligible[0]
-            item["faculty"] = new_prof["name"]
-
-            free_slots = [
-                sk for sk in all_slot_keys()
-                if sk not in faculty_slots[new_prof["name"]]
-                and get_slot_day(sk) in new_prof.get("availability", [])
-            ]
-            if free_slots:
-                item["slot"] = free_slots[0]
-
-        if faculty_load[item["faculty"]] < faculty_by_name[item["faculty"]]["absolute_max_units"]:
-            faculty_load[item["faculty"]] += 1
-            faculty_slots[item["faculty"]].add(item["slot"])
-
-    return schedule
-
-def mutate(schedule: list[dict], faculty: list[dict], mut_rate: float = 0.1) -> list[dict]:
-    current_fit = fitness(schedule, faculty)
-    faculty_by_name = {f["name"]: f for f in faculty}
-
-    # Track current occupied slots across mutations to prevent creating overlap errors
-    occupied_slots = {(item["faculty"], item["slot"]) for item in schedule}
-
-    for item in schedule:
-        adaptive_rate = max(mut_rate * 0.25, mut_rate * (1.0 - min(max(current_fit, 0.0), 1.0)))
-        if random.random() >= adaptive_rate:
-            continue
-
-        required_specs = STATIC_SPEC_LOOKUP.get(item["subject"], ["Information Technology (General Elective)"])
-        eligible = sorted(
-            [
-                f for f in faculty
-                if f["name"] != item["faculty"]
-                and is_eligible(f, item["subject"], 0, None)
-            ],
-            key=lambda f: (
-                -len(set(f.get("specialization", [])) & set(required_specs)),
-                f["absolute_max_units"]
-            )
-        )
-        if not eligible:
-            continue
-
-        new_prof = eligible[0]
         
-        # FIX: Find slots that are physically unassigned to prevent downstream logic breakage
-        free_slots = [
-            sk for sk in all_slot_keys()
-            if get_slot_day(sk) in new_prof.get("availability", [])
-            and (new_prof["name"], sk) not in occupied_slots
-        ]
-        
-        if free_slots:
-            occupied_slots.discard((item["faculty"], item["slot"]))
-            item["faculty"] = new_prof["name"]
-            item["slot"] = random.choice(free_slots)
-            occupied_slots.add((item["faculty"], item["slot"]))
+    required_specs = STATIC_SPEC_LOOKUP.get(subject_name, [])
+    prof_specs = prof.get("specialization", [])
+    
+    if not required_specs:
+        return True
+    return any(spec in prof_specs for spec in required_specs)
 
-    return schedule
+def calculate_fitness(chromosome: list[dict], faculty_list: list[dict], subject_list: list[dict]) -> float:
+    # Build internal maps
+    fac_map = {f["name"]: f for f in faculty_list}
+    prof_loads = {f["name"]: 0 for f in faculty_list}
+    prof_slots = {f["name"]: set() for f in faculty_list}
+    slot_assigned = set()
 
-def crossover(parent1: list[dict], parent2: list[dict], faculty: list[dict]) -> list[dict]:
-    child = []
-    for g1, g2 in zip(parent1, parent2):
-        child.append(copy.deepcopy(g1 if fitness([g1], faculty) >= fitness([g2], faculty) else g2))
-    return repair(child, faculty)
+    penalty = 0
+    matches = 0
 
-def tournament_selection(population: list, faculty: list[dict], k: int = 5) -> list[dict]:
-    sample = random.sample(population, min(k, len(population)))
-    return max(sample, key=lambda x: fitness(x, faculty))
+    for gene in chromosome:
+        prof_name = gene["faculty"]
+        subj_name = gene["subject"]
+        slot = gene["slot"]
 
-def balance_workload(population: list, faculty: list[dict]) -> None:
-    faculty_by_name = {f["name"]: f for f in faculty}
+        if not prof_name:
+            penalty += 15
+            continue
 
-    for schedule in population:
-        faculty_load = {f["name"]: 0 for f in faculty}
-        for item in schedule:
-            faculty_load[item["faculty"]] = faculty_load.get(item["faculty"], 0) + 1
+        # Double booking check
+        if slot in slot_assigned:
+            penalty += 40
+        slot_assigned.add(slot)
 
-        for _ in range(10):
-            max_l = max(faculty_load.values())
-            min_l = min(faculty_load.values())
-            if max_l - min_l <= 1:
-                break
+        # Professor overlapping slots
+        if slot in prof_slots[prof_name]:
+            penalty += 50
+        prof_slots[prof_name].add(slot)
 
-            high = [f for f, l in faculty_load.items() if l == max_l]
-            low  = [f for f, l in faculty_load.items() if l == min_l]
+        prof = fac_map.get(prof_name)
+        if not prof:
+            penalty += 20
+            continue
 
-            for h in high:
-                for lo in low:
-                    candidates = [i for i in schedule if i["faculty"] == h]
-                    for c in candidates:
-                        prof_lo = faculty_by_name.get(lo)
-                        if prof_lo and is_eligible(prof_lo, c["subject"], faculty_load[lo], None):
-                            c["faculty"] = lo
-                            faculty_load[h]  -= 1
-                            faculty_load[lo] += 1
-                            break
+        # Day availability compliance
+        day = get_slot_day(slot)
+        if day not in prof.get("availability", []):
+            penalty += 45
 
-# ============================================================
-# MAIN GA LOOP
-# ============================================================
-def run_ga(
-    faculty: list[dict],
-    subjects: list[dict],
-    pop_size: int = 20,
-    num_generations: int = 50,
-    mut_rate: float = 0.1,
-    cross_rate: float = 0.8,
-) -> list[dict]:
-    global ga_progress
+        # Workload calculation
+        prof_loads[prof_name] += 2
 
-    # Initialize population
-    population = []
-    for _ in range(pop_size):
-        if random.random() < 0.5:
-            population.append(greedy_schedule(faculty, subjects))
+        # Specialization mapping bonus/penalty
+        req_specs = STATIC_SPEC_LOOKUP.get(subj_name, [])
+        if any(sp in prof.get("specialization", []) for sp in req_specs):
+            matches += 1
         else:
-            base = greedy_schedule(faculty, subjects)
-            population.append(mutate(copy.deepcopy(base), faculty, mut_rate=0.3))
+            if not subj_name.startswith("IT Elective"):
+                penalty += 12
 
-    best_history = []
-    stagnation   = 0
-    elite_size   = max(3, pop_size // 5)
-    stagnation_limit = max(20, num_generations // 3)
-    stagnation_window = 10
+    # Overload checks
+    for p_name, load in prof_loads.items():
+        prof = fac_map[p_name]
+        if load > prof["absolute_max_units"]:
+            penalty += (load - prof["absolute_max_units"]) * 15
+        elif load > prof["max_units"]:
+            penalty += (load - prof["max_units"]) * 5
 
-    for gen in range(1, num_generations + 1):
-        with ga_lock:
-            ga_progress["current"] = gen
+    # Target maximum specialization match yield
+    match_score = matches * 15
+    return max(0.1, 1000 - penalty + match_score)
 
-        population.sort(key=lambda x: fitness(x, faculty), reverse=True)
-        best_fit = fitness(population[0], faculty)
-        best_history.append(best_fit)
+def generate_individual(faculty_list: list[dict], subject_list: list[dict]) -> list[dict]:
+    chromosome = []
+    shuffled_slots = list(TIME_SLOTS)
+    random.shuffle(shuffled_slots)
 
-        if len(best_history) > stagnation_window:
-            recent = best_history[-stagnation_window:]
-            if max(recent) - min(recent) < 1e-6:
-                stagnation += 1
+    slot_idx = 0
+    for subj in subject_list:
+        # Every subject section needs 1 schedule entry chunk mapping
+        if slot_idx >= len(shuffled_slots):
+            slot_idx = 0
+            random.shuffle(shuffled_slots)
+
+        slot = shuffled_slots[slot_idx]
+        slot_str = f"{slot[0]}: {slot[1]:02d}:00-{slot[2]:02d}:00"
+        slot_idx += 1
+
+        eligible_profs = [f["name"] for f in faculty_list if is_eligible(f, subj["name"], 0, slot_str)]
+        selected_prof = random.choice(eligible_profs) if eligible_profs else random.choice([f["name"] for f in faculty_list])
+
+        chromosome.append({
+            "faculty": selected_prof,
+            "subject": subj["name"],
+            "type": subj.get("type", "Software"),
+            "slot": slot_str
+        })
+    return chromosome
+
+def mutate(chromosome: list[dict], faculty_list: list[dict], mut_rate: float) -> list[dict]:
+    mutated = copy.deepcopy(chromosome)
+    for gene in mutated:
+        if random.random() < mut_rate:
+            if random.random() < 0.5:
+                gene["faculty"] = random.choice([f["name"] for f in faculty_list])
             else:
-                stagnation = 0
-        if stagnation >= stagnation_limit:
-            print(f"[GA] Early stop at generation {gen}")
-            break
+                slot = random.choice(TIME_SLOTS)
+                gene["slot"] = f"{slot[0]}: {slot[1]:02d}:00-{slot[2]:02d}:00"
+    return mutated
 
-        next_gen = population[:elite_size]
-        attempts = 0
+def crossover(parent1: list[dict], parent2: list[dict], cross_rate: float) -> tuple[list[dict], list[dict]]:
+    if random.random() > cross_rate:
+        return copy.deepcopy(parent1), copy.deepcopy(parent2)
 
-        while len(next_gen) < pop_size and attempts < 1000:
-            attempts += 1
-            p1 = tournament_selection(population, faculty)
-            p2 = tournament_selection(population, faculty)
+    point = random.randint(1, len(parent1) - 1)
+    child1 = parent1[:point] + parent2[point:]
+    child2 = parent2[:point] + parent1[point:]
+    return child1, child2
 
-            child = crossover(p1, p2, faculty) if random.random() < cross_rate else copy.deepcopy(p1)
-            child = mutate(child, faculty, mut_rate)
-            next_gen.append(child)
-
-        population = next_gen
-        balance_workload(population, faculty)
-
-        best = max(population, key=lambda x: fitness(x, faculty))
-        with ga_lock:
-            ga_progress["result"] = best
-
-    best_final = max(population, key=lambda x: fitness(x, faculty))
-    with ga_lock:
-        ga_progress.update({"current": num_generations, "running": False, "result": best_final})
-
-    print(f"[GA] Done. Fitness: {fitness(best_final, faculty):.4f}")
-    return best_final
-
-def safe_run_ga(*args):
+# ============================================================
+# GENETIC ALGORITHM ORCHESTRATION ENGINE
+# ============================================================
+def safe_run_ga(faculty_list: list[dict], subject_list: list[dict], pop_size: int, generations: int, mut_rate: float, cross_rate: float):
+    global ga_progress
     try:
-        run_ga(*args)
+        population = [generate_individual(faculty_list, subject_list) for _ in range(pop_size)]
+
+        for gen in range(generations):
+            # Evaluate current batch fitness metrics
+            scored = [(ind, calculate_fitness(ind, faculty_list, subject_list)) for ind in population]
+            scored.sort(key=lambda x: x[1], reverse=True)
+
+            best_ind, best_fit = scored[0]
+
+            with ga_lock:
+                ga_progress["current"] = gen + 1
+                ga_progress["result"] = copy.deepcopy(best_ind)
+
+            # Selection (Elitism + Roulette Selection Wheel framework strategy)
+            new_pop = [copy.deepcopy(best_ind)] # Elitism tracking guarantee
+            
+            while len(new_pop) < pop_size:
+                p1 = random.choice(scored[:max(2, pop_size // 2)])[0]
+                p2 = random.choice(scored[:max(2, pop_size // 2)])[0]
+                
+                c1, c2 = crossover(p1, p2, cross_rate)
+                new_pop.append(mutate(c1, faculty_list, mut_rate))
+                if len(new_pop) < pop_size:
+                    new_pop.append(mutate(c2, faculty_list, mut_rate))
+
+            population = new_pop
+            time.sleep(0.01) # Breathe interval flag context lock breaker
+
     except Exception as e:
-        print(f"[GA] CRASHED: {e}")
+        print(f"[GA] Engine Error Trace Trigger: {e}")
+    finally:
         with ga_lock:
             ga_progress["running"] = False
 
+def preload_ai_cache(subjects: list[dict]) -> None:
+    def worker():
+        print("[AI Cache] background check indexing cycle started...")
+        for s in subjects:
+            name = s.get("name", "").strip()
+            if name and name not in SPECIALIZATION_MAP and name not in ai_specialization_cache:
+                res = get_ai_specialization(name)
+                if res:
+                    ai_specialization_cache[name] = res
+        print("[AI Cache] background validation complete.")
+    threading.Thread(target=worker, daemon=True).start()
+
 # ============================================================
-# API ROUTES
+# API CONTROLLERS
 # ============================================================
 @app.route("/run-ga", methods=["POST"])
-def run_ga_api():
+def run_ga_endpoint():
     global ga_progress
-    
-    # FIX: Block multiple simultaneous background processing requests
     with ga_lock:
         if ga_progress["running"]:
-            return jsonify({"error": "GA optimization is already running"}), 409
+            return jsonify({"error": "An optimization execution layout sequence is already running"}), 400
 
-    data = request.get_json(force=True)
+    data = request.get_json() or {}
     if not data:
-        return jsonify({"error": "No data provided"}), 400
+        return jsonify({"error": "Empty or corrupted API payload structural metadata data provided"}), 400
 
     faculty  = data.get("faculty", [])
     subjects_raw = data.get("subjects", [])
@@ -525,15 +354,12 @@ def run_ga_api():
 
     return jsonify({"status": "started"})
 
-@app.route("/progress")
-def get_progress():
-    # FIX: Guard reading with thread lock to ensure safe state management
+
+@app.route("/progress", methods=["GET"])
+def progress_endpoint():
     with ga_lock:
         return jsonify(ga_progress)
 
-@app.route("/health")
-def health_check():
-    return jsonify({"status": "ok"})
 
 if __name__ == "__main__":
-    app.run(debug=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=5000, debug=True)
