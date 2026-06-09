@@ -51,16 +51,16 @@ const SPECIALIZATIONS = [
 ];
 
 const INITIAL_FACULTY = [
-  { name: 'Rodriguez',  specialization: ['Cybersecurity / Information Assurance'],          max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu','Fri','Sat'] },
-  { name: 'Arelliano',  specialization: ['Systems Architecture / Enterprise Systems'],       max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu','Fri','Sat'] },
-  { name: 'Taganas',    specialization: ['Software Engineering / Programming Languages'],    max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu','Fri','Sat'] },
-  { name: 'Flores',     specialization: ['Data Science / Applied Mathematics'],              max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu','Fri','Sat'] },
-  { name: 'Castillo',   specialization: ['Computer Networks / Network Engineering'],         max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu','Fri','Sat'] },
-  { name: 'Bravo',      specialization: ['Emerging Technologies / Application Development'], max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu','Fri','Sat'] },
-  { name: 'Villanueva', specialization: ['Software Engineering / Systems Integration'],      max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu','Fri','Sat'] },
-  { name: 'Ampongan',   specialization: ['Information Systems / Database Management'],       max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu','Fri','Sat'] },
-  { name: 'Pontillas',  specialization: ['Human-Computer Interaction (HCI)'],                max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu','Fri','Sat'] },
-  { name: 'Aquino',     specialization: ['Database Systems / Information Systems'],          max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu','Fri','Sat'] }
+  { name: 'Prof A',  specialization: ['Cybersecurity / Information Assurance'],          max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof B',  specialization: ['Systems Architecture / Enterprise Systems'],       max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof C',    specialization: ['Software Engineering / Programming Languages'],    max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof D',     specialization: ['Data Science / Applied Mathematics'],              max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof E',   specialization: ['Computer Networks / Network Engineering'],         max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof F',      specialization: ['Emerging Technologies / Application Development'], max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof G', specialization: ['Software Engineering / Systems Integration'],      max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof H',   specialization: ['Information Systems / Database Management'],       max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof I',  specialization: ['Human-Computer Interaction (HCI)'],                max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof J',     specialization: ['Database Systems / Information Systems'],          max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] }
 ];
 
 const DEFAULT_SUBJECTS = [
