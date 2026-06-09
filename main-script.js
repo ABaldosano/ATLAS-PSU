@@ -894,9 +894,40 @@ function confirmDropdownSelection(dropdown) {
   saveFacultyToStorage();
 }
 
+function updateSelectAllBtnState(day) {
+  const dayLong = DAY_MAP[day];
+  const checkboxes = Array.from(
+    document.querySelectorAll(`#facultyInputTable tbody tr .avail-checkboxes input[value="${dayLong}"]`)
+  );
+  const btn = document.querySelector(`.btn-select-day[data-day="${day}"]`);
+  if (!btn) return;
+  const allChecked = checkboxes.length > 0 && checkboxes.every(cb => cb.checked);
+  btn.classList.toggle('all-selected', allChecked);
+}
+
+function updateAllSelectAllBtnStates() {
+  Object.keys(DAY_MAP).forEach(day => updateSelectAllBtnState(day));
+}
+
+function selectAllByDay(day) {
+  const dayLong = DAY_MAP[day];
+  const checkboxes = Array.from(
+    document.querySelectorAll(`#facultyInputTable tbody tr .avail-checkboxes input[value="${dayLong}"]`)
+  );
+  if (!checkboxes.length) return;
+
+  // Toggle: if every checkbox is already checked → uncheck all; otherwise check all
+  const allChecked = checkboxes.every(cb => cb.checked);
+  checkboxes.forEach(cb => { cb.checked = !allChecked; });
+  saveFacultyToStorage();
+  updateSelectAllBtnState(day);
+}
+
+
 function saveFacultyToStorage() {
   try {
     localStorage.setItem('facultyData', JSON.stringify(getFacultyFromTable()));
+    updateAllSelectAllBtnStates();
   } catch (e) {
     console.warn('LocalStorage save failed:', e);
   }
@@ -917,8 +948,16 @@ function initFacultyManagement() {
     addBtn.addEventListener('click', () => {
       addFacultyRow();
       saveFacultyToStorage();
+      updateAllSelectAllBtnStates();
     });
   }
+
+  // Bind Select-All-Day buttons in the Availability header
+  document.querySelectorAll('.btn-select-day').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectAllByDay(btn.dataset.day);
+    });
+  });
 
   // Close dropdowns on outside click
   document.addEventListener('click', e => {
@@ -1791,6 +1830,7 @@ window.addEventListener('DOMContentLoaded', () => {
   } else {
     INITIAL_FACULTY.forEach(f => addFacultyRow(f));
   }
+  updateAllSelectAllBtnStates();
 
   // Load subjects
   const savedSubjects = loadSubjectsFromStorage();

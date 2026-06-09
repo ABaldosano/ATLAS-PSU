@@ -1150,28 +1150,81 @@ td {
 #facultyInputTable th:nth-child(3),
 #facultyInputTable td:nth-child(3) { width: 100px; }
 #facultyInputTable th:nth-child(4),
-#facultyInputTable td:nth-child(4) { min-width: 260px; }
+#facultyInputTable td:nth-child(4) { min-width: 340px; }
 #facultyInputTable th:nth-child(5),
 #facultyInputTable td:nth-child(5) { width: 90px; }
 
-/* Availability checkboxes */
+/* Availability column header layout */
+.avail-th {
+  vertical-align: top !important;
+  padding-bottom: 6px !important;
+}
+
+.avail-th-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* Select-All buttons row — same 6-column grid as avail-checkboxes */
+.avail-select-all-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  min-width: 300px;
+}
+
+.btn-select-day {
+  padding: 0.18rem 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--clr-primary-300, #c4a882);
+  background: var(--clr-primary-100, #f5ebe0);
+  color: var(--clr-primary-800, #6b3a00);
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.6;
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform 80ms;
+  user-select: none;
+}
+
+.btn-select-day:hover {
+  background: var(--clr-primary-200, #e8d5bc);
+  border-color: var(--clr-primary-500, #a0622a);
+}
+
+.btn-select-day:active {
+  transform: scale(0.95);
+}
+
+.btn-select-day.all-selected {
+  background: var(--clr-primary-500, #a0622a);
+  color: #fff;
+  border-color: var(--clr-primary-600, #7d4a1e);
+}
+
+/* Availability checkboxes — same 6-column grid as the header buttons */
 .avail-checkboxes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  min-width: 300px;
 }
 
 .avail-checkboxes label {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-1);
   font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   color: var(--text-primary);
-  padding: 0.2rem 0.5rem;
+  padding: 0.2rem 0.25rem;
   border-radius: var(--radius-sm);
   transition: background var(--transition-fast);
+  white-space: nowrap;
 }
 
 .avail-checkboxes label:hover {
