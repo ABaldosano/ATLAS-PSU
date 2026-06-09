@@ -765,7 +765,7 @@ function initRunGA() {
    9. FACULTY MANAGEMENT SYSTEM
    ============================================================ */
 function addFacultyRow(data = {}) {
-  const tbody = document.querySelector('#facultyInputTable tbody');
+  const tbody = document.querySelector('#facultyTable tbody');
   if (!tbody) return;
 
   const tr = document.createElement('tr');
@@ -803,7 +803,7 @@ function addFacultyRow(data = {}) {
     </td>
     <td><input type="number" value="${maxUnits}" min="0" max="50"></td>
     <td><div class="avail-checkboxes">${daysHTML}</div></td>
-    <td><button type="button" class="btn-delete row-action-btn" title="Delete Row">×</button></td>
+    <td><button type="button" class="btn-delete row-action-btn" title="Delete Row">Delete</button></td>
   `;
 
   // Bind dropdown toggle action handler listener sequence hook event context capture bubble logic
