@@ -325,11 +325,132 @@ function updateCharts(data) {
     reportsBarChart.data.datasets[0].backgroundColor = colors;
     reportsBarChart.update();
   }
+
+  updateDashboardStats(counts);
 }
 
 /* ============================================================
-   6. ANALYTICS & FAIRNESS REPORT
+   5b. DASHBOARD STAT CARDS
    ============================================================ */
+function updateDashboardStats(counts) {
+  const values = Object.values(counts);
+  if (!values.length) return;
+  const avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+  const overloaded = values.filter(v => v > MAX_UNITS).length;
+  const maxV = Math.max(...values);
+  const minV = Math.min(...values);
+  const balance = maxV > 0 ? ((1 - (maxV - minV) / maxV) * 100).toFixed(0) : 100;
+  const elAvg  = document.getElementById('statAvgLoad');
+  const elOver = document.getElementById('statOverloaded');
+  const elBal  = document.getElementById('statBalance');
+  if (elAvg)  elAvg.textContent  = avg;
+  if (elOver) elOver.textContent = overloaded;
+  if (elBal)  elBal.textContent  = balance + '%';
+}
+
+/* ============================================================
+   5c. TIMETABLE RENDER
+   ============================================================ */
+function renderTimetable(data) {
+  const container = document.getElementById('facultyTimetableContainer');
+  if (!container) return;
+
+  const TIME_SLOTS = ['7-9', '9-11', '11-13', '13-15', '15-17', '17-19'];
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const lookup = {};
+  data.forEach(item => {
+    const parts = item.slot.split(':');
+    const day  = parts[0].trim();
+    const time = (parts[1] || '').trim();
+    const key  = `${day}-${time}`;
+    if (!lookup[key]) lookup[key] = [];
+    lookup[key].push({ faculty: item.faculty, subject: item.subject });
+  });
+
+  let html = '<div class="timetable-scroll"><table class="timetable-grid"><thead><tr>';
+  html += '<th class="tt-time-col">Time</th>';
+  DAYS.forEach(d => { html += `<th class="tt-day-col tt-hd-${d}">${d}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  TIME_SLOTS.forEach(slot => {
+    html += `<tr><td class="tt-time-label">${slot}</td>`;
+    DAYS.forEach(day => {
+      const key = `${day}-${slot}`;
+      const entries = lookup[key] || [];
+      if (!entries.length) {
+        html += `<td class="tt-cell tt-empty"></td>`;
+      } else {
+        html += `<td class="tt-cell tt-filled tt-bg-${day}">`;
+        entries.forEach(e => {
+          html += `<div class="tt-entry">
+            <div class="tt-faculty-tag">${escapeHTML(e.faculty)}</div>
+            <div class="tt-subject-tag">${escapeHTML(e.subject)}</div>
+          </div>`;
+        });
+        html += `</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+/* ============================================================
+   5d. REPORTS SUMMARY TABLE
+   ============================================================ */
+function updateReportsPanel(data) {
+  if (!data || !data.length) return;
+
+  const byFaculty = {};
+  data.forEach(item => {
+    if (!item.faculty) return;
+    if (!byFaculty[item.faculty]) byFaculty[item.faculty] = [];
+    byFaculty[item.faculty].push(item);
+  });
+
+  const tbody = document.querySelector('#reportsSummaryTable tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  Object.keys(byFaculty).sort().forEach(faculty => {
+    const assignments = byFaculty[faculty];
+    const totalUnits = assignments.length * 2;
+    const unitsCls = totalUnits > MAX_UNITS ? 'units-over' : totalUnits === MAX_UNITS ? 'units-max' : 'units-ok';
+
+    assignments.forEach((item, idx) => {
+      const day = item.slot.split(':')[0].trim();
+      const tr = document.createElement('tr');
+
+      const subjectSlotHTML = `
+        <td>
+          <span>${escapeHTML(item.subject)}</span>
+          <span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(item.slot)}</span>
+        </td>`;
+
+      if (idx === 0) {
+        tr.innerHTML = `
+          <td rowspan="${assignments.length}">
+            <strong>${escapeHTML(faculty)}</strong>
+          </td>
+          ${subjectSlotHTML}
+          <td rowspan="${assignments.length}">
+            <span class="units-badge ${unitsCls}">${totalUnits}</span>
+          </td>
+          <td rowspan="${assignments.length}">
+            <button class="btn-edit-faculty btn" data-faculty="${escapeAttr(faculty)}">&#9998; Edit</button>
+          </td>`;
+      } else {
+        tr.innerHTML = subjectSlotHTML;
+      }
+      tbody.appendChild(tr);
+    });
+  });
+}
+
+
 const TYPE_SPEC_KEYWORDS = {
   Software:  ['software','programming','application','emerging','integration','web','multimedia','embedded','hci','human-computer','graphics','visual','algorithms','data structures','gis','geographic'],
   Database:  ['database','information systems','information management'],
@@ -407,7 +528,6 @@ function computeFairnessReport(data) {
   el('fairnessScore').className = 'fairness-card-value ' + scoreClass;
   el('fairnessScoreLabel').textContent = scoreLabel;
   el('fairnessJain').textContent = jain.toFixed(4);
-  el('fairnessSumUnits').textContent = sumLoads + ' u';
   el('fairnessStdDev').textContent = stdDev.toFixed(2) + ' u';
   el('fairnessMatchRate').textContent = matchRate.toFixed(1) + '%';
 
@@ -452,7 +572,7 @@ function computeFairnessReport(data) {
    7. TABLE RENDERING & SORTING
    ============================================================ */
 function renderTable(data) {
-  const tbody = document.querySelector('#gaResultsTable tbody');
+  const tbody = document.querySelector('#gaScheduleTable tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
 
@@ -505,13 +625,13 @@ function applySort(data, key, ascending) {
 }
 
 function enableTableSort() {
-  document.querySelectorAll('#gaResultsTable th[data-sort]').forEach(th => {
+  document.querySelectorAll('#gaScheduleTable th[data-key]').forEach(th => {
     // Clean old listeners
     const cloned = th.cloneNode(true);
     th.parentNode.replaceChild(cloned, th);
 
     // Active arrow indicator
-    if (cloned.dataset.sort === lastSort.key) {
+    if (cloned.dataset.key === lastSort.key) {
       cloned.classList.add('sorted-active');
       cloned.classList.toggle('sorted-desc', !lastSort.ascending);
     } else {
@@ -519,10 +639,10 @@ function enableTableSort() {
     }
 
     cloned.addEventListener('click', () => {
-      if (lastSort.key === cloned.dataset.sort) {
+      if (lastSort.key === cloned.dataset.key) {
         lastSort.ascending = !lastSort.ascending;
       } else {
-        lastSort.key = cloned.dataset.sort;
+        lastSort.key = cloned.dataset.key;
         lastSort.ascending = true;
       }
       renderTable(lastGAResult);
@@ -534,7 +654,7 @@ function enableTableSort() {
    8. RUN GENETIC ALGORITHM ENGINE
    ============================================================ */
 let progressInterval = null;
-const progressFill = document.getElementById('gaProgressFill');
+const progressFill = document.querySelector('#gaProgressBar .fill');
 
 async function triggerGARunAPI() {
   const population  = document.getElementById('populationSize').value;
@@ -622,6 +742,8 @@ function initRunGA() {
             updateCharts(lastGAResult);
             computeFairnessReport(lastGAResult);
             renderDashboardAssignments(lastGAResult);
+            renderTimetable(lastGAResult);
+            updateReportsPanel(lastGAResult);
             renderSubjectsGrouped();
             showToast('Optimization Run Complete!', 'success');
           }
@@ -754,7 +876,8 @@ function repositionDropdown(dropdown) {
   content.style.zIndex = '9999';
 }
 
-function selectAllByDay(dayLong) {
+function selectAllByDay(dayShort) {
+  const dayLong = DAY_MAP[dayShort];
   const checkboxes = document.querySelectorAll(`#facultyTable tbody input[value="${dayLong}"]`);
   if (!checkboxes.length) return;
 
@@ -768,7 +891,7 @@ function selectAllByDay(dayLong) {
 
 function updateAllSelectAllBtnStates() {
   Object.entries(DAY_MAP).forEach(([short, long]) => {
-    const btn = document.querySelector(`.btn-select-day[data-day="${long}"]`);
+    const btn = document.querySelector(`.btn-select-day[data-day="${short}"]`);
     if (!btn) return;
 
     const checkboxes = document.querySelectorAll(`#facultyTable tbody input[value="${long}"]`);
@@ -822,7 +945,7 @@ function initFacultyManagement() {
   if (addBtn) {
     addBtn.addEventListener('click', () => {
       addFacultyRow();
-      saveFacultyToStorage();
+      saveFaculty();
       updateAllSelectAllBtnStates();
     });
   }
@@ -893,13 +1016,20 @@ function addSubjectRow(data = {}) {
     <td><input type="number" class="unit-input lec" value="${lec}" min="0" max="10"></td>
     <td><input type="number" class="unit-input lab" value="${lab}" min="0" max="10"></td>
     <td><button type="button" class="btn-delete row-action-btn" title="Delete Row">×</button></td>
+    <td class="total-cell">${lec + lab}</td>
   `;
 
   // Dynamic change tracker loops listeners attachments
+  const updateTotal = () => {
+    const l = parseInt(tr.querySelector('.lec')?.value || 0);
+    const b = parseInt(tr.querySelector('.lab')?.value || 0);
+    const tc = tr.querySelector('.total-cell');
+    if (tc) tc.textContent = l + b;
+  };
   tr.querySelectorAll('select, input').forEach(el => {
-    el.addEventListener('change', saveSubjects);
+    el.addEventListener('change', () => { saveSubjects(); updateTotal(); });
     if(el.tagName === 'INPUT') {
-      el.addEventListener('input', debounce(saveSubjects, 500));
+      el.addEventListener('input', debounce(() => { saveSubjects(); updateTotal(); }, 500));
     }
   });
 
@@ -1578,3 +1708,16 @@ window.addEventListener('DOMContentLoaded', () => {
   saveSubjects();
   renderSubjectsGrouped();
 });
+
+/* ============================================================
+   GLOBAL EXPORTS & TOAST UTILITY
+   ============================================================ */
+function showToast(msg, type = 'info') {
+  const t = document.getElementById('toastNotif');
+  if (!t) return;
+  t.textContent = msg;
+  t.className = 'toast-notif show' + (type ? ' toast-' + type : '');
+  setTimeout(() => { t.className = 'toast-notif'; }, 3000);
+}
+
+window.switchPanel = switchPanel;
