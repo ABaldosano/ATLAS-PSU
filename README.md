@@ -1,5 +1,5 @@
 <div align="center">
-<img src="favicon.png" alt="ATLAS PSU" width="72" />
+<img src="/assets/images/favicon.pngfavicon.png" alt="ATLAS PSU" width="72" />
 
 # ATLAS PSU
 
