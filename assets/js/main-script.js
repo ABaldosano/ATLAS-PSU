@@ -1373,10 +1373,22 @@ function initExports() {
       const exportData = filterResultBySemester(lastGAResult);
       const mode = getActiveSemester();
       const semLabel = mode ? (mode.year ? `${mode.year}_${mode.semester}` : mode.semester) : 'all';
-      const headers = ['Faculty Member', 'Subject Title', 'Classification Type', 'Class Type', 'Schedule Slot', 'Room', 'Semester'];
+      const headers = [
+        'Faculty Member',
+        'Subject Title',
+        'Year',
+        'Section',
+        'Classification Type',
+        'Class Type',
+        'Schedule Slot',
+        'Room',
+        'Semester'
+      ];
       const rows = exportData.map(item => [
         `"${(item.faculty||'').replace(/"/g,'""')}"`,
         `"${(item.subject||'').replace(/"/g,'""')}"`,
+        `"${(item.year||'').replace(/"/g,'""')}"`,
+        `"${(item.section||'').replace(/"/g,'""')}"`,
         `"${(item.type||'').replace(/"/g,'""')}"`,
         `"${(item.class_type||'LECTURE').replace(/"/g,'""')}"`,
         `"${(item.slot_display||item.slot||'').replace(/"/g,'""')}"`,

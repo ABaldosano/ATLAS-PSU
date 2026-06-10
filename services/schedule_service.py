@@ -84,22 +84,15 @@ def expand_subjects_to_sections(subjects_raw: list, active_semester: str,
         if not s.get("name"):
             continue
         year = s.get("year", "")
-        sec_keys = sorted([
-            k for k, v in class_sizes.items() if v.get("year") == year
-        ]) if year else [""]
-        if not sec_keys:
-            sec_keys = [""]
-
-        for sec_key in sec_keys:
-            sections.append({
-                "name":       s.get("name", ""),
-                "type":       s.get("type", "Core Theory"),
-                "class_type": s.get("class_type", "LECTURE"),
-                "hours":      int(s.get("hours", 2)),
-                "semester":   s.get("semester", active_semester or ""),
-                "year":       year,
-                "section":    sec_key,
-            })
+        sections.append({
+    "name": s.get("name", ""),
+    "type": s.get("type", "Core Theory"),
+    "class_type": s.get("class_type", "LECTURE"),
+    "hours": int(s.get("hours", 2)),
+    "semester": s.get("semester", active_semester or ""),
+    "year": year,
+    "section": s.get("section", ""),
+})
     return sections
 
 
