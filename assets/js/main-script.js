@@ -117,7 +117,7 @@ const DEFAULT_SUBJECTS = [
   { name: 'Quantitative Methods w/ Modelling and Simulation',   type: 'Mathematics',        year: '2nd Year', semester: '2nd Semester', lec_units: 3, lab_units: 0 },
   { name: 'Network Technologies 1',                             type: 'Networks & Security',year: '2nd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
   { name: 'Integrative Programming Technologies 1',             type: 'Programming',        year: '2nd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Systems Integration and Architecture 1',             type: 'Systems',            year: '2nd Year', semester: '3rd Semester', lec_units: 3, lab_units: 0 },
+  { name: 'Systems Integration and Architecture 1',             type: 'Systems',            year: '2nd Year', semester: '2nd Semester', lec_units: 3, lab_units: 0 },
   { name: 'Advanced Database Systems',                          type: 'Data Management',    year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
   { name: 'Network Technologies 2',                             type: 'Networks & Security',year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
   { name: 'Information Assurance and Security 1',               type: 'Networks & Security',year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 0 },
