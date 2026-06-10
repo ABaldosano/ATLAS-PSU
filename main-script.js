@@ -851,13 +851,17 @@ function initRunGA() {
           const status = await res.json();
 
           if (status.total > 0) {
-            const pct = Math.round((status.current / status.total) * 100);
+            const pct = Math.min(100, Math.round((status.current / status.total) * 100));
             if (progressFill) {
               progressFill.style.width = pct + '%';
               progressFill.style.backgroundColor = getProgressColor(pct);
             }
             if (genCounter) {
-              genCounter.textContent = `Generations Optimized: ${status.current} / ${status.total}`;
+              const phaseLabel = status.phase === 'cp_sat' ? 'CP-SAT Solving'
+                : status.phase === 'ga' ? 'GA Optimizing'
+                : status.phase === 'analytics' ? 'Computing Analytics'
+                : 'Processing';
+              genCounter.textContent = `${phaseLabel}: ${pct}%`;
             }
           }
 
@@ -876,8 +880,21 @@ function initRunGA() {
             renderTimetable(displayResult);
             updateReportsPanel(displayResult);
             renderSubjectsGrouped();
+
+            // Store analytics from backend if available
+            if (status.analytics && Object.keys(status.analytics).length > 0) {
+              try { window.__atlasAnalytics = status.analytics; } catch(e) {}
+            }
+            // Display backend warnings
+            if (status.warnings && status.warnings.length > 0) {
+              status.warnings.forEach(w => console.warn('[ATLAS]', w));
+            }
+
             try { localStorage.setItem('lastGAResult', JSON.stringify(lastGAResult)); } catch(e) {}
-            showToast('Optimization Run Complete!', 'success');
+            const metricsSuffix = status.metrics && status.metrics.solve_time_sec
+              ? ` (CP-SAT: ${status.metrics.solve_time_sec}s, GA: ${status.metrics.ga_time_sec || 0}s)`
+              : '';
+            showToast('Optimization Complete!' + metricsSuffix, 'success');
           }
         } catch (err) {
           console.error('Polling error:', err);
@@ -1161,7 +1178,7 @@ function addSubjectRow(data = {}) {
     <td><input type="number" class="unit-input lec" value="${lec}" min="0" max="10"></td>
     <td><input type="number" class="unit-input lab" value="${lab}" min="0" max="10"></td>
     <td class="total-cell txt-center">${lec + lab}</td>
-    <td><button type="button" class="btn-delete row-action-btn" title="Delete Row">×</button></td>
+    <td><button type="button" class="btn-delete row-action-btn" title="Delete Row">Delete</button></td>
   `;
 
   // Dynamic change tracker loops listeners attachments
