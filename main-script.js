@@ -24,7 +24,7 @@ const DAY_COLORS = {
 
 const MAX_UNITS = 24;
 
-const DATA_VERSION = 'v3'; // bump to wipe stale localStorage on deploy
+const DATA_VERSION = 'v4'; // bump to wipe stale localStorage on deploy
 
 const SPECIALIZATIONS = [
   'Core Theory',
@@ -187,7 +187,7 @@ function initCharts() {
             callbacks: {
               label: ctx => {
                 const v = ctx.raw;
-                let status = v > MAX_UNITS ? ' ⚠ OVERLOAD' : v === MAX_UNITS ? ' ⚠ MAX LOAD' : v <= 2 ? ' ⚠ TOO LOW' : '';
+                let status = v > MAX_UNITS ? ' OVERLOAD' : v === MAX_UNITS ? ' MAX LOAD' : v <= 2 ? ' TOO LOW' : '';
                 return `${ctx.label}: ${v} units${status}`;
               }
             }
@@ -442,7 +442,7 @@ function renderTimetable(data) {
             <span class="tt-class-tag ${ctClass}">${escapeHTML(e.class_type || 'LECTURE')}</span>
             <div class="tt-faculty-tag">${escapeHTML(e.faculty)}</div>
             <div class="tt-subject-tag">${escapeHTML(e.subject)}</div>
-            ${e.room ? `<span class="tt-room-tag">&#128205; ${escapeHTML(e.room)}</span>` : ''}
+            ${e.room ? `<span class="tt-room-tag"> ${escapeHTML(e.room)}</span>` : ''}
           </div>`;
         });
         html += `</td>`;
@@ -486,7 +486,7 @@ function updateReportsPanel(data) {
         <td>
           <span>${escapeHTML(item.subject)}</span><br>
           <span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(displaySlot)}</span>
-          ${item.room ? `<span class="room-badge" style="margin-left:4px;">&#128205; ${escapeHTML(item.room)}</span>` : ''}
+          ${item.room ? `<span class="room-badge" style="margin-left:4px;"> ${escapeHTML(item.room)}</span>` : ''}
           <span class="class-type-tag ${(item.class_type||'LECTURE').toLowerCase()}" style="margin-left:4px;">${escapeHTML(item.class_type||'LECTURE')}</span>
         </td>`;
 
@@ -672,7 +672,7 @@ function renderTable(data) {
       <td>${escapeHTML(item.type)}</td>
       <td><span class="class-type-tag ${(item.class_type||'LECTURE').toLowerCase()}">${escapeHTML(item.class_type || 'LECTURE')}</span></td>
       <td>${escapeHTML(displaySlot)}</td>
-      <td>${item.room ? `<span class="room-badge">&#128205; ${escapeHTML(item.room)}</span>` : '<span class="text-muted">—</span>'}</td>
+      <td>${item.room ? `<span class="room-badge"> ${escapeHTML(item.room)}</span>` : '<span class="text-muted">—</span>'}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -734,39 +734,50 @@ async function triggerGARunAPI() {
 
   const rawSubjects = getSubjectsFromTable();
 
-  // Filter by active academic semester mode
+  // Filter by active academic semester — strict: only matching semester subjects
+  const mode = getActiveSemester();
   let filteredSubjects = rawSubjects;
-  try {
-    const mode = JSON.parse(localStorage.getItem('academicMode') || 'null');
-    if (mode && mode.semester) {
-      filteredSubjects = rawSubjects.filter(s => s.semester === mode.semester);
-    }
-  } catch(e) {}
+  if (mode && mode.semester) {
+    filteredSubjects = rawSubjects.filter(s => s.semester === mode.semester);
+  }
+
+  if (!filteredSubjects.length) {
+    throw new Error(
+      mode
+        ? `No subjects found for ${mode.semester}. Add subjects tagged for this semester or change the active period.`
+        : 'No subjects configured. Add subjects in the Faculty & Subjects panel.'
+    );
+  }
 
   const expandedSubjects = [];
   filteredSubjects.forEach(s => {
     if (s.lec_units > 0) {
       const lecCount = Math.ceil(s.lec_units / 2);
       for (let i = 0; i < lecCount; i++) {
-        expandedSubjects.push({ name: s.name, type: s.type, class_type: 'LECTURE', hours: 2 });
+        expandedSubjects.push({ name: s.name, type: s.type, class_type: 'LECTURE', hours: 2, semester: s.semester });
       }
     }
     if (s.lab_units > 0) {
-      expandedSubjects.push({ name: s.name, type: s.type, class_type: 'LAB', hours: 3 });
+      expandedSubjects.push({ name: s.name, type: s.type, class_type: 'LAB', hours: 3, semester: s.semester });
     }
   });
 
   if (!expandedSubjects.length) {
-    throw new Error('No subjects found for the selected semester.');
+    throw new Error('No subjects with assigned units found for the selected semester.');
   }
 
+  // Load soft constraints and include in payload for backend scoring
+  const softConstraints = loadSoftConstraintsFromStorage();
+
   const payload = {
-    faculty:    getFacultyFromTable(),
-    subjects:   expandedSubjects,
-    population: Number(population),
-    generations:Number(generations),
-    mutation:   Number(mutation),
-    crossover:  Number(crossover)
+    faculty:          getFacultyFromTable(),
+    subjects:         expandedSubjects,
+    population:       Number(population),
+    generations:      Number(generations),
+    mutation:         Number(mutation),
+    crossover:        Number(crossover),
+    soft_constraints: softConstraints,
+    active_semester:  mode ? mode.semester : null,
   };
 
   const response = await fetch(`${API_BASE}/run-ga`, {
@@ -826,12 +837,13 @@ function initRunGA() {
             runBtn.disabled = false;
 
             lastGAResult = status.result || [];
-            renderTable(lastGAResult);
-            updateCharts(lastGAResult);
-            computeFairnessReport(lastGAResult);
-            renderDashboardAssignments(lastGAResult);
-            renderTimetable(lastGAResult);
-            updateReportsPanel(lastGAResult);
+            const displayResult = filterResultBySemester(lastGAResult);
+            renderTable(displayResult);
+            updateCharts(displayResult);
+            computeFairnessReport(displayResult);
+            renderDashboardAssignments(displayResult);
+            renderTimetable(displayResult);
+            updateReportsPanel(displayResult);
             renderSubjectsGrouped();
             try { localStorage.setItem('lastGAResult', JSON.stringify(lastGAResult)); } catch(e) {}
             showToast('Optimization Run Complete!', 'success');
@@ -862,7 +874,11 @@ function addFacultyRow(data = {}) {
   const nameValue     = data.name || '';
   const specsSelected = data.specialization || [];
   const maxUnits      = data.max_units !== undefined ? data.max_units : 24;
-  const daysSelected  = data.availability || ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  // Availability is stored and sent to the backend as short names (Mon, Tue, Wed, Thu, Fri, Sat)
+  // matching DAYS in app.py. Normalize any legacy long-name values on load.
+  const DAY_LONG_TO_SHORT = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Friday:'Fri', Saturday:'Sat' };
+  const rawAvail = data.availability || ['Mon','Tue','Wed','Thu','Fri','Sat'];
+  const daysSelected = rawAvail.map(d => DAY_LONG_TO_SHORT[d] || d);
 
   const checkboxHTML = SPECIALIZATIONS.map(spec => `
     <label>
@@ -871,9 +887,11 @@ function addFacultyRow(data = {}) {
     </label>
   `).join('');
 
+  // Checkbox value is the short name (Mon/Tue/…) — this is what getFacultyFromTable
+  // reads and what app.py expects in the availability array.
   const daysHTML = Object.entries(DAY_MAP).map(([short, long]) => `
     <label>
-      <input type="checkbox" value="${long}" ${daysSelected.includes(long) ? 'checked' : ''}>${short}
+      <input type="checkbox" value="${short}" ${daysSelected.includes(short) ? 'checked' : ''}>${short}
     </label>
   `).join('');
 
@@ -966,14 +984,13 @@ function repositionDropdown(dropdown) {
 }
 
 function selectAllByDay(dayShort) {
-  const dayLong = DAY_MAP[dayShort];
-  const checkboxes = document.querySelectorAll(`#facultyTable tbody input[value="${dayLong}"]`);
+  // Checkboxes now use short names as values (Mon, Tue, …) — query directly by dayShort.
+  const checkboxes = document.querySelectorAll(`#facultyTable tbody .avail-checkboxes input[value="${dayShort}"]`);
   if (!checkboxes.length) return;
 
-  // Check if all are currently checked to toggle state correctly
   const allChecked = Array.from(checkboxes).every(c => c.checked);
   checkboxes.forEach(c => { c.checked = !allChecked; });
-  
+
   saveFaculty();
   updateAllSelectAllBtnStates();
 }
@@ -983,7 +1000,8 @@ function updateAllSelectAllBtnStates() {
     const btn = document.querySelector(`.btn-select-day[data-day="${short}"]`);
     if (!btn) return;
 
-    const checkboxes = document.querySelectorAll(`#facultyTable tbody input[value="${long}"]`);
+    // Checkboxes use short names as values — query by short name.
+    const checkboxes = document.querySelectorAll(`#facultyTable tbody .avail-checkboxes input[value="${short}"]`);
     if (!checkboxes.length) {
       btn.classList.remove('active');
       return;
@@ -1275,7 +1293,7 @@ function renderDashboardAssignments(data) {
                     <span class="fac-assign-meta">
                       <span class="class-type-tag ${ctClass}" style="font-size:0.6rem;padding:1px 5px;">${escapeHTML(item.class_type || 'LECTURE')}</span>
                       ${displaySlot ? `<span class="fac-assign-slot">${escapeHTML(displaySlot)}</span>` : ''}
-                      ${item.room ? `<span class="tt-room-tag" style="font-size:0.65rem;">&#128205; ${escapeHTML(item.room)}</span>` : ''}
+                      ${item.room ? `<span class="tt-room-tag" style="font-size:0.65rem;"> ${escapeHTML(item.room)}</span>` : ''}
                     </span>
                   </span>
                 </li>`;
@@ -1302,18 +1320,23 @@ function initExports() {
         alert('Run the optimization framework engine first before exporting data records.');
         return;
       }
-      const headers = ['Faculty Member', 'Subject Title', 'Classification Type', 'Class Type', 'Schedule Slot', 'Room'];
-      const rows = lastGAResult.map(item => [
+      const exportData = filterResultBySemester(lastGAResult);
+      const mode = getActiveSemester();
+      const semLabel = mode ? (mode.year ? `${mode.year}_${mode.semester}` : mode.semester) : 'all';
+      const headers = ['Faculty Member', 'Subject Title', 'Classification Type', 'Class Type', 'Schedule Slot', 'Room', 'Semester'];
+      const rows = exportData.map(item => [
         `"${(item.faculty||'').replace(/"/g,'""')}"`,
         `"${(item.subject||'').replace(/"/g,'""')}"`,
         `"${(item.type||'').replace(/"/g,'""')}"`,
         `"${(item.class_type||'LECTURE').replace(/"/g,'""')}"`,
         `"${(item.slot_display||item.slot||'').replace(/"/g,'""')}"`,
-        `"${(item.room||'').replace(/"/g,'""')}"`
+        `"${(item.room||'').replace(/"/g,'""')}"`,
+        `"${(item.semester||mode?.semester||'').replace(/"/g,'""')}"`
       ].join(','));
 
       const csv = [headers.join(',')].concat(rows).join('\n');
-      downloadFile(csv, 'atlas_psu_reports.csv', 'text/csv');
+      const fileName = `atlas_psu_${semLabel.replace(/[^a-zA-Z0-9_-]/g,'_')}.csv`;
+      downloadFile(csv, fileName, 'text/csv');
     });
   }
 
@@ -1339,13 +1362,18 @@ function generatePrintReport() {
   };
   const deptFull = deptMap[dept] || dept;
 
+  const mode = getActiveSemester();
+  const semesterLabel = mode ? (mode.year ? `${mode.year} — ${mode.semester}` : mode.semester) : 'All Semesters';
+
+  const reportData = filterResultBySemester(lastGAResult);
+
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   const timeStr = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
 
   // Compute breakdown mapping metric profiles internally
   const byFaculty = {};
-  lastGAResult.forEach(item => {
+  reportData.forEach(item => {
     if (!item.faculty) return;
     if (!byFaculty[item.faculty]) byFaculty[item.faculty] = [];
     byFaculty[item.faculty].push(item);
@@ -1366,7 +1394,7 @@ function generatePrintReport() {
     `;
   }).join('');
 
-  const scheduleRows = [...lastGAResult].sort((a, b) => {
+  const scheduleRows = [...reportData].sort((a, b) => {
     const ps = s => {
       const [d, t] = s.split(':');
       return (DAY_ORDER[d.trim()] * 100) + parseInt(t || '0');
@@ -1660,6 +1688,10 @@ function generatePrintReport() {
         <span class="cover-meta-label">Faculty Count</span>
         <span class="cover-meta-value">${Object.keys(byFaculty).length} members</span>
       </div>
+      <div class="cover-meta-item" style="grid-column:1/-1;">
+        <span class="cover-meta-label">Academic Period</span>
+        <span class="cover-meta-value">${escapeHTML(semesterLabel)}</span>
+      </div>
     </div>
   </div>
 
@@ -1812,6 +1844,7 @@ window.addEventListener('DOMContentLoaded', () => {
     localStorage.removeItem('facultyData');
     localStorage.removeItem('subjectsData');
     localStorage.removeItem('classSizesData');
+    localStorage.removeItem('lastGAResult');
     localStorage.setItem('atlasDataVersion', DATA_VERSION);
   }
 
@@ -1852,57 +1885,139 @@ window.addEventListener('DOMContentLoaded', () => {
   // Init soft constraints (needs faculty loaded first)
   initSoftConstraints();
 
+  // Update semester badges now that subjects are loaded
+  updateAllSemesterBadges();
+
   // Restore last GA result and re-render all views
   try {
     const saved = localStorage.getItem('lastGAResult');
     if (saved) {
       lastGAResult = JSON.parse(saved);
       if (lastGAResult && lastGAResult.length) {
-        renderTable(lastGAResult);
-        updateCharts(lastGAResult);
-        computeFairnessReport(lastGAResult);
-        renderDashboardAssignments(lastGAResult);
-        renderTimetable(lastGAResult);
-        updateReportsPanel(lastGAResult);
+        const displayResult = filterResultBySemester(lastGAResult);
+        renderTable(displayResult);
+        updateCharts(displayResult);
+        computeFairnessReport(displayResult);
+        renderDashboardAssignments(displayResult);
+        renderTimetable(displayResult);
+        updateReportsPanel(displayResult);
       }
     }
   } catch(e) { lastGAResult = []; }
 });
 
+function getActiveSemester() {
+  try {
+    const mode = JSON.parse(localStorage.getItem('academicMode') || 'null');
+    return mode && mode.semester ? mode : null;
+  } catch (e) { return null; }
+}
+
+function getActiveSemesterLabel() {
+  const mode = getActiveSemester();
+  if (!mode) return null;
+  return mode.year ? `${mode.year} · ${mode.semester}` : mode.semester;
+}
+
+function updateAllSemesterBadges() {
+  const mode = getActiveSemester();
+  const label = getActiveSemesterLabel();
+
+  // Navbar badge
+  const navBadge = document.getElementById('navSemesterBadge');
+  if (navBadge) {
+    if (mode) {
+      navBadge.textContent = label;
+      navBadge.style.display = 'flex';
+    } else {
+      navBadge.style.display = 'none';
+    }
+  }
+
+  // Panel context badges
+  ['dashboardSemContext', 'optimizationSemContext', 'reportsSemContext'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (mode) {
+      el.textContent = `Showing: ${label}`;
+      el.style.display = 'inline-flex';
+    } else {
+      el.style.display = 'none';
+    }
+  });
+
+  // Active banner in Settings
+  const banner = document.getElementById('academicModeActiveBanner');
+  const bannerText = document.getElementById('academicActiveBannerText');
+  if (banner && bannerText) {
+    if (mode) {
+      bannerText.textContent = `Active Period: ${label}`;
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
+  }
+}
+
+function filterResultBySemester(data) {
+  // lastGAResult items carry the subject name; we filter by checking the subjects table
+  // If no active semester set, return all
+  const mode = getActiveSemester();
+  if (!mode) return data;
+  const semester = mode.semester;
+
+  // Build a set of subject names valid for this semester
+  const allSubjects = getSubjectsFromTable();
+  const validNames = new Set(
+    allSubjects.filter(s => s.semester === semester).map(s => s.name)
+  );
+  if (!validNames.size) return data; // no subject list to filter against, return all
+
+  return data.filter(item => validNames.has(item.subject));
+}
+
 function initAcademicMode() {
   const yearInput = document.getElementById('academicYear');
   const semSel    = document.getElementById('academicSemester');
   const saveBtn   = document.getElementById('saveAcademicMode');
-  const label     = document.getElementById('academicModeLabel');
   const savedMsg  = document.getElementById('academicModeSaved');
   if (!yearInput || !semSel || !saveBtn) return;
 
-  const load = () => {
-    try { return JSON.parse(localStorage.getItem('academicMode') || 'null'); } catch(e) { return null; }
-  };
-
-  const render = (mode) => {
-    if (!mode) { if(label) label.textContent = 'No academic mode set.'; return; }
-    const txt = `${mode.year} · ${mode.semester}`;
-    if (label) label.textContent = 'Active: ' + txt;
-    // Show in navbar brand
-    const brand = document.querySelector('.brand');
-    if (brand) brand.title = 'ATLAS PSU · ' + txt;
-  };
-
-  const saved = load();
+  const saved = getActiveSemester();
   if (saved) {
     yearInput.value = saved.year || '';
     semSel.value    = saved.semester || '1st Semester';
-    render(saved);
   }
 
+  updateAllSemesterBadges();
+
   saveBtn.addEventListener('click', () => {
-    const mode = { year: yearInput.value.trim(), semester: semSel.value };
+    const year     = yearInput.value.trim();
+    const semester = semSel.value;
+    if (!year) {
+      showToast('Please enter an Academic Year (e.g. 2024–2025).', 'info');
+      yearInput.focus();
+      return;
+    }
+    const mode = { year, semester };
     localStorage.setItem('academicMode', JSON.stringify(mode));
-    render(mode);
-    if (savedMsg) { savedMsg.style.display = 'inline'; setTimeout(() => { savedMsg.style.display = 'none'; }, 2000); }
-    showToast(`Academic mode set: ${mode.year} · ${mode.semester}`, 'success');
+    updateAllSemesterBadges();
+    if (savedMsg) {
+      savedMsg.style.display = 'inline-flex';
+      setTimeout(() => { savedMsg.style.display = 'none'; }, 2500);
+    }
+    showToast(`Active Period set: ${year} · ${semester}`, 'success');
+
+    // If a GA result is loaded, re-filter and re-render views to respect new semester
+    if (lastGAResult && lastGAResult.length) {
+      const filtered = filterResultBySemester(lastGAResult);
+      renderTable(filtered);
+      updateCharts(filtered);
+      computeFairnessReport(filtered);
+      renderDashboardAssignments(filtered);
+      renderTimetable(filtered);
+      updateReportsPanel(filtered);
+    }
   });
 }
 

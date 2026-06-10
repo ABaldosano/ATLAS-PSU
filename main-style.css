@@ -512,14 +512,28 @@ code {
   margin-bottom: var(--space-8);
   padding-bottom: var(--space-5);
   border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.page-header h2 {
+.page-header > div:first-child,
+.page-header > h2:only-child,
+.page-header > h2:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.page-header h2,
+.page-header > div h2 {
   margin-bottom: var(--space-2);
   font-size: clamp(1.25rem, 2vw, 1.625rem);
 }
 
-.page-header p {
+.page-header p,
+.page-header > div p {
   max-width: 680px;
   color: var(--text-secondary);
 }
@@ -2761,4 +2775,199 @@ body.page-login {
   color: var(--text-muted);
   font-family: var(--font-mono);
   white-space: nowrap;
+}
+
+/* ============================================================
+   ACADEMIC MODE — SEMESTER BADGE & PANEL CONTEXT
+   ============================================================ */
+
+/* Navbar semester badge */
+.nav-semester-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--clr-primary-600);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.nav-semester-badge::before {
+  display: none;
+}
+
+/* Sem context badge in panel header */
+.sem-context-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  background: var(--clr-primary-50);
+  border: 1.5px solid var(--clr-primary-200);
+  color: var(--clr-primary-700);
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+.sem-context-badge::before {
+  display: none;
+}
+
+/* Academic Mode Card in Settings */
+.academic-mode-card {
+  background: var(--bg-white);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--radius-lg, 12px);
+  padding: 20px 24px;
+  max-width: 600px;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow-sm);
+}
+
+.academic-mode-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.academic-mode-header-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.academic-mode-header-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.academic-mode-header-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.academic-active-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, var(--clr-primary-50), #fff8f5);
+  border: 1.5px solid var(--clr-primary-200);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--clr-primary-700);
+  margin-bottom: 16px;
+}
+.academic-active-banner.hidden { display: none; }
+
+.academic-active-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--clr-primary-500);
+  flex-shrink: 0;
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.75); }
+}
+
+.academic-mode-form-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.academic-mode-form-row .modal-form-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 5px;
+}
+.academic-mode-form-row .modal-form-group input,
+.academic-mode-form-row .modal-form-group select {
+  min-width: 160px;
+}
+
+.academic-mode-save-col {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 2px;
+}
+
+.academic-saved-flash {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--clr-success-500);
+  animation: fade-in-out 2.5s ease forwards;
+}
+@keyframes fade-in-out {
+  0% { opacity: 0; transform: translateY(-4px); }
+  15% { opacity: 1; transform: translateY(0); }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.academic-mode-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--clr-warning-100);
+  border: 1px solid var(--clr-accent-100);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.775rem;
+  color: var(--clr-accent-500);
+  line-height: 1.45;
+}
+.academic-warning-icon {
+  font-style: normal;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+@media (max-width: 600px) {
+  .academic-mode-form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .academic-mode-form-row .modal-form-group {
+    flex: unset;
+    width: 100%;
+  }
+  .academic-mode-form-row .modal-form-group input,
+  .academic-mode-form-row .modal-form-group select {
+    min-width: unset;
+    width: 100%;
+  }
+  .academic-mode-save-col {
+    flex-direction: row;
+  }
+  .nav-semester-badge {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+  }
+  .sem-context-badge {
+    font-size: 0.7rem;
+    padding: 4px 10px;
+  }
 }

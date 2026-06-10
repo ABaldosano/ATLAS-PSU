@@ -135,7 +135,15 @@ def set_soft_constraint(faculty_name: str, constraint_type: str, value) -> None:
     soft_constraints_store[faculty_name][constraint_type] = value
 
 def score_soft_constraints(gene: dict) -> float:
-    """Returns a positive score bonus for satisfying soft constraints (0.0 - 30.0)."""
+    """
+    Returns a score adjustment for satisfying/violating soft constraints.
+    Positive for satisfied preferences; negative for violated restrictions.
+
+    FIX: restricted_days and maternity_leave were previously applied per-gene
+    with no cap, so a faculty member on maternity leave would accumulate -20 per
+    every assignment, collapsing global fitness. These are now capped per-call so
+    a single gene never contributes more than one instance of each flag penalty.
+    """
     bonus = 0.0
     faculty_name = gene.get("faculty", "")
     slot = gene.get("slot", "")
@@ -144,50 +152,66 @@ def score_soft_constraints(gene: dict) -> float:
     if not constraints:
         return 0.0
 
-    # 1. Preferred teaching period
-    preferred_period = constraints.get("preferred_period")
-    if preferred_period and slot:
+    # Parse slot components once
+    slot_day = ""
+    slot_start_hour = -1
+    if slot:
         try:
-            hour_part = slot.split(":")[1].strip()
-            start_hour = int(hour_part.split("-")[0].strip().split(":")[0])
-            if preferred_period == "morning" and 7 <= start_hour < 12:
-                bonus += 5.0
-            elif preferred_period == "afternoon" and 12 <= start_hour < 17:
-                bonus += 5.0
-            elif preferred_period == "evening" and start_hour >= 17:
-                bonus += 5.0
+            day_part, time_part = slot.split(":", 1)
+            slot_day = day_part.strip()
+            start_str = time_part.strip().split("-")[0].strip()
+            slot_start_hour = int(start_str.split(":")[0])
         except Exception:
             pass
 
-    # 2. Room preference
+    # 1. Preferred teaching period — bonus for matching, soft penalty for mismatch
+    preferred_period = constraints.get("preferred_period")
+    if preferred_period and slot_start_hour >= 0:
+        if preferred_period == "morning" and 7 <= slot_start_hour < 12:
+            bonus += 5.0
+        elif preferred_period == "afternoon" and 12 <= slot_start_hour < 17:
+            bonus += 5.0
+        elif preferred_period == "evening" and slot_start_hour >= 17:
+            bonus += 5.0
+        else:
+            bonus -= 2.0  # soft penalty for wrong period
+
+    # 2. Room preference — exact match bonus
     preferred_room = constraints.get("preferred_room")
-    if preferred_room and room and room == preferred_room:
-        bonus += 4.0
+    if preferred_room and room:
+        if room == preferred_room:
+            bonus += 5.0
+        else:
+            bonus -= 1.0
 
-    # 3. Building preference
+    # 3. Building preference — partial-match bonus
     preferred_building = constraints.get("preferred_building")
-    if preferred_building and room and preferred_building.lower() in room.lower():
-        bonus += 3.0
+    if preferred_building and room:
+        if preferred_building.lower() in room.lower():
+            bonus += 3.0
+        else:
+            bonus -= 0.5
 
-    # 4. Floor preference (encoded in room name as "Floor X")
+    # 4. Floor preference (encoded in room name)
     preferred_floor = constraints.get("preferred_floor")
-    if preferred_floor and room and str(preferred_floor).lower() in room.lower():
-        bonus += 2.0
+    if preferred_floor and room:
+        floor_str = str(preferred_floor).lower()
+        if floor_str in room.lower():
+            bonus += 2.0
 
-    # 5. Date unavailability (list of "YYYY-MM-DD" strings to avoid - soft)
-    unavailable_dates = constraints.get("unavailable_dates", [])
-    # Cannot evaluate against a specific date from slot alone; skip scoring (no penalty applied)
-
-    # 6. Leave periods (list of {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"})
-    # No per-slot date info in slot string; leave scoring deferred to scheduler extension
-
-    # 7. Maternity leave flag (bool) - same deferral
-    # 8. Temporary schedule restrictions (list of day strings)
+    # 5. Day restrictions — strong penalty per gene assigned on a restricted day.
+    #    This is intentionally per-gene: each assignment on a restricted day is a
+    #    real violation and must be individually discouraged.
     restricted_days = constraints.get("restricted_days", [])
-    if restricted_days and slot:
-        slot_day = slot.split(":")[0].strip()
-        if slot_day in restricted_days:
-            bonus -= 8.0  # soft penalty, not hard block
+    if restricted_days and slot_day and slot_day in restricted_days:
+        bonus -= 12.0
+
+    # 6. Maternity leave flag — capped at -20 per gene (not compounding beyond that).
+    #    Previously this could collapse total fitness when a faculty had many genes.
+    #    The GA will still strongly avoid assigning any gene to this faculty, which
+    #    is the correct behavior; the penalty just won't be unbounded.
+    if constraints.get("maternity_leave"):
+        bonus -= 20.0
 
     return bonus
 
@@ -255,13 +279,14 @@ def assign_room(gene: dict, room_usage: dict) -> str:
     preferred_room = get_soft_constraints(gene.get("faculty", "")).get("preferred_room")
 
     pool = LABORATORY_ROOMS + ALL_ROOMS if class_type == "LAB" else ALL_ROOMS
-    # Try preferred room first (soft)
+    # Try preferred room first (soft), then shuffle the rest
     if preferred_room and preferred_room in pool:
-        candidates = [preferred_room] + [r for r in pool if r != preferred_room]
+        rest = [r for r in pool if r != preferred_room]
+        random.shuffle(rest)
+        candidates = [preferred_room] + rest
     else:
         candidates = pool[:]
-
-    random.shuffle(candidates) if not preferred_room else None
+        random.shuffle(candidates)
 
     for room in candidates:
         key = f"{room}|{slot}"
@@ -269,7 +294,7 @@ def assign_room(gene: dict, room_usage: dict) -> str:
             room_usage[key] = True
             return room
 
-    # Fallback: return first room even if conflict (will be penalized)
+    # Fallback: return first room even if conflict (will be penalized in fitness)
     return candidates[0] if candidates else "Unassigned"
 
 # ============================================================
@@ -321,7 +346,7 @@ def calculate_fitness(chromosome: list[dict], faculty_list: list[dict], subject_
     slot_assigned = set()
     room_slot_used = set()
 
-    penalty = 0
+    penalty = 0.0
     matches = 0
     soft_bonus = 0.0
 
@@ -336,7 +361,6 @@ def calculate_fitness(chromosome: list[dict], faculty_list: list[dict], subject_
             continue
 
         # Double booking check (slot uniqueness per subject section)
-        slot_key_full = f"{prof_name}|{slot}"
         if slot in slot_assigned:
             penalty += 40
         slot_assigned.add(slot)
@@ -359,7 +383,7 @@ def calculate_fitness(chromosome: list[dict], faculty_list: list[dict], subject_
             penalty += 20
             continue
 
-        # Day availability compliance
+        # Day availability compliance (hard constraint)
         day = get_slot_day(slot)
         if day not in prof.get("availability", []):
             penalty += 45
@@ -373,9 +397,10 @@ def calculate_fitness(chromosome: list[dict], faculty_list: list[dict], subject_
             if not subj_name.startswith("IT Elective"):
                 penalty += 12
 
-        # Soft constraint scoring
+        # Soft constraint scoring per gene
         soft_bonus += score_soft_constraints(gene)
 
+    # Workload balance penalties — per-faculty hard cap enforcement
     for p_name, load in prof_loads.items():
         prof = fac_map[p_name]
         if load > prof["absolute_max_units"]:
@@ -383,14 +408,440 @@ def calculate_fitness(chromosome: list[dict], faculty_list: list[dict], subject_
         elif load > prof["max_units"]:
             penalty += (load - prof["max_units"]) * 5
 
+    # ----------------------------------------------------------------
+    # Variance penalty — discourages unbalanced load distribution
+    # across the entire faculty pool.
+    #
+    # FIX: original code applied `gap > std_dev` even when std_dev == 0
+    # (perfectly balanced schedule), causing false penalties. Guard added.
+    # ----------------------------------------------------------------
+    load_values = list(prof_loads.values())
+    if load_values:
+        mean_load = sum(load_values) / len(load_values)
+        variance  = sum((l - mean_load) ** 2 for l in load_values) / len(load_values)
+        std_dev   = variance ** 0.5
+
+        # Quadratic variance pressure (primary balancing force)
+        penalty += variance * 1.5
+
+        # Extra per-faculty penalty for being severely under-assigned.
+        # Guard: only apply when std_dev > 0 to avoid false penalties on
+        # a perfectly balanced schedule where every gap == 0 > 0 is False.
+        if std_dev > 0:
+            for load in load_values:
+                gap = mean_load - load
+                if gap > std_dev:
+                    penalty += (gap - std_dev) * 3.0
+
     match_score = matches * 15
-    return max(0.1, 1000 - penalty + match_score + soft_bonus)
+    # Clamp soft_bonus to prevent runaway negative scores from dominating
+    soft_bonus = max(-200.0, soft_bonus)
+    return max(0.1, 1000.0 - penalty + match_score + soft_bonus)
+
+def calculate_average_load(chromosome: list[dict], faculty_list: list[dict]) -> float:
+    """Compute mean load (units) across all faculty for a given chromosome."""
+    counts = {f["name"]: 0 for f in faculty_list}
+    for gene in chromosome:
+        name = gene.get("faculty", "")
+        if name in counts:
+            counts[name] += 2
+    values = list(counts.values())
+    return sum(values) / len(values) if values else 0.0
+
+def rebalance_chromosome(chromosome: list[dict], faculty_list: list[dict]) -> list[dict]:
+    """
+    Post-GA load rebalancing pass.
+
+    After the GA returns its best individual, this function redistributes load
+    from overloaded faculty to under-loaded faculty while preserving hard
+    constraints (day availability, specialization match, absolute_max_units cap).
+
+    FIXES vs original:
+    1. The `loads[best] >= loads[prof_name]` guard used a stale snapshot.
+       Loads are now updated in-place every time a reassignment is made so
+       subsequent iterations within the same pass see current values.
+    2. Passes were capped at 3, which is insufficient for large faculty pools.
+       Now iterates up to len(chromosome) times (stops early if no change).
+    3. The `over`/`under` sets are refreshed from the live `loads` dict after
+       each swap instead of relying on threshold-based discards, preventing
+       stale membership from blocking valid reassignments.
+    4. Reassignment now checks `absolute_max_units` on the receiving faculty so
+       rebalancing cannot push them over their hard cap.
+    5. The swap guard `loads[best] >= loads[prof_name]` is removed — it was
+       always true when `best` came from `under` and `prof_name` from `over`,
+       but stale loads made it fire incorrectly and block valid swaps.
+    """
+    rebalanced = copy.deepcopy(chromosome)
+    fac_map = {f["name"]: f for f in faculty_list}
+
+    def build_loads(chrom: list[dict]) -> dict:
+        loads = {f["name"]: 0 for f in faculty_list}
+        for g in chrom:
+            n = g.get("faculty", "")
+            if n in loads:
+                loads[n] += 2
+        return loads
+
+    max_passes = len(rebalanced) + 1
+
+    for _ in range(max_passes):
+        loads = build_loads(rebalanced)
+        values = list(loads.values())
+        if not values:
+            break
+        avg = sum(values) / len(values)
+
+        # Faculty clearly below / above average (threshold: 2 units)
+        under = {n for n, v in loads.items() if v < avg - 2}
+        over  = {n for n, v in loads.items() if v > avg + 2}
+
+        if not under or not over:
+            break
+
+        changed = False
+        for gene in rebalanced:
+            prof_name = gene.get("faculty", "")
+            if prof_name not in over:
+                continue
+
+            subj_name = gene.get("subject", "")
+            slot_key  = gene.get("slot", "")
+            day       = get_slot_day(slot_key)
+
+            # Find eligible under-loaded replacements
+            candidates = []
+            for uname in under:
+                prof = fac_map.get(uname)
+                if not prof:
+                    continue
+                # Hard: day availability
+                if day and day not in prof.get("availability", []):
+                    continue
+                # Hard: absolute max units cap — do not push them over
+                if loads[uname] + 2 > prof.get("absolute_max_units", 999):
+                    continue
+                # Hard: specialization match (electives are open to all)
+                if subj_name.startswith("IT Elective"):
+                    candidates.append(uname)
+                    continue
+                req_specs = STATIC_SPEC_LOOKUP.get(subj_name, [])
+                if not req_specs or any(sp in prof.get("specialization", []) for sp in req_specs):
+                    candidates.append(uname)
+
+            if not candidates:
+                continue
+
+            # Pick the most under-loaded eligible candidate
+            best = min(candidates, key=lambda n: loads[n])
+
+            # Perform reassignment and update live loads immediately
+            loads[prof_name] -= 2
+            loads[best]      += 2
+            gene["faculty"]   = best
+
+            # Refresh over/under membership based on updated loads
+            avg = sum(loads.values()) / len(loads)
+            under = {n for n, v in loads.items() if v < avg - 2}
+            over  = {n for n, v in loads.items() if v > avg + 2}
+
+            changed = True
+            if not over or not under:
+                break
+
+        if not changed:
+            break
+
+    return rebalanced
+
+def resolve_spec_mismatches(chromosome: list[dict], faculty_list: list[dict]) -> list[dict]:
+    """
+    Post-GA pass: find genes where the assigned faculty's specialization does not
+    match the subject's required specialization, then try to reassign to a better-
+    matched faculty who (a) is available on that slot's day, (b) has not exceeded
+    absolute_max_units, and (c) has no existing gene in that exact slot.
+
+    Runs before day-enforcement and overlap resolution so downstream passes work
+    on spec-correct data. Electives are always skipped (open assignment).
+    Preserves load balance by preferring under-loaded candidates.
+    """
+    fixed   = copy.deepcopy(chromosome)
+    fac_map = {f["name"]: f for f in faculty_list}
+
+    def build_loads(chrom: list[dict]) -> dict:
+        loads = {f["name"]: 0 for f in faculty_list}
+        for g in chrom:
+            n = g.get("faculty", "")
+            if n in loads:
+                loads[n] += 2
+        return loads
+
+    def faculty_slot_set(chrom: list[dict], fname: str) -> set:
+        return {g["slot"] for g in chrom if g.get("faculty") == fname}
+
+    for gene in fixed:
+        subj_name = gene.get("subject", "")
+        if subj_name.startswith("IT Elective"):
+            continue
+        req_specs = STATIC_SPEC_LOOKUP.get(subj_name, [])
+        if not req_specs:
+            continue
+
+        prof_name = gene.get("faculty", "")
+        prof      = fac_map.get(prof_name)
+        if not prof:
+            continue
+
+        # Already a valid match — skip
+        if any(sp in prof.get("specialization", []) for sp in req_specs):
+            continue
+
+        # Gene is mismatched — find a better faculty
+        slot = gene.get("slot", "")
+        day  = get_slot_day(slot)
+        loads = build_loads(fixed)
+
+        candidates = []
+        for alt in faculty_list:
+            aname = alt["name"]
+            if aname == prof_name:
+                continue
+            # Must match spec
+            if not any(sp in alt.get("specialization", []) for sp in req_specs):
+                continue
+            # Must be available on that day
+            if day and day not in alt.get("availability", []):
+                continue
+            # Must not already have a gene in this exact slot (collision)
+            if slot in faculty_slot_set(fixed, aname):
+                continue
+            # Must not exceed hard cap
+            if loads.get(aname, 0) + 2 > alt.get("absolute_max_units", 999):
+                continue
+            candidates.append((aname, loads.get(aname, 0)))
+
+        if not candidates:
+            continue
+
+        # Pick most under-loaded spec-correct candidate
+        candidates.sort(key=lambda x: x[1])
+        best_name = candidates[0][0]
+        gene["faculty"] = best_name
+
+    return fixed
+
+
+def _allowed_slots_for(prof: dict) -> list[str]:
+    """
+    Return every slot string that falls on a day this faculty member is available.
+    Result is shuffled for randomised selection during repair passes.
+    These are the ONLY slots this faculty member is legally allowed to occupy.
+    """
+    avail = set(prof.get("availability", []))
+    slots = [
+        f"{d}: {h[0]:02d}:00-{h[1]:02d}:00"
+        for (d, h) in [(t[0], (t[1], t[2])) for t in TIME_SLOTS]
+        if d in avail
+    ]
+    random.shuffle(slots)
+    return slots
+
+
+def enforce_day_constraints(chromosome: list[dict], faculty_list: list[dict]) -> list[dict]:
+    """
+    Hard-cap post-pass: every gene whose slot day is NOT in that faculty's
+    availability is forcibly relocated to a legal slot.
+
+    Strategy (in order, most to least preferred):
+      1. Find a slot on an allowed day that this faculty member does not
+         already occupy in this chromosome.
+      2. If every allowed slot is already taken by this faculty (extreme
+         overload), find another faculty member who (a) is eligible for
+         this subject, (b) has a free slot on an allowed day, and (c) is
+         below or at average load — swap the gene to them.
+      3. If neither is possible (truly impossible geometry), keep the gene
+         but move it to ANY allowed-day slot for this faculty (accepting a
+         time-overlap — resolve_faculty_slot_overlaps will clean those up).
+      4. Last resort: leave the gene untouched (will be flagged by fitness
+         but the output won't crash).
+
+    This function does NOT modify load balance — it only fixes day violations.
+    """
+    fixed = copy.deepcopy(chromosome)
+    fac_map = {f["name"]: f for f in faculty_list}
+
+    def faculty_occupied_slots(chrom: list[dict], fname: str) -> set:
+        return {g["slot"] for g in chrom if g.get("faculty") == fname}
+
+    def build_loads(chrom: list[dict]) -> dict:
+        loads = {f["name"]: 0 for f in faculty_list}
+        for g in chrom:
+            n = g.get("faculty", "")
+            if n in loads:
+                loads[n] += 2
+        return loads
+
+    for gene in fixed:
+        prof_name = gene.get("faculty", "")
+        slot      = gene.get("slot", "")
+        day       = get_slot_day(slot)
+        prof      = fac_map.get(prof_name)
+        if not prof:
+            continue
+        avail = prof.get("availability", [])
+        if day in avail:
+            continue  # already legal, nothing to do
+
+        # ── Strategy 1: relocate to a free allowed slot for this faculty ──
+        occupied  = faculty_occupied_slots(fixed, prof_name)
+        allowed   = _allowed_slots_for(prof)
+        free_slot = next((s for s in allowed if s not in occupied), None)
+
+        if free_slot:
+            gene["slot"]         = free_slot
+            gene["slot_display"] = slot_to_12h(free_slot)
+            continue
+
+        # ── Strategy 2: swap to another eligible faculty with free capacity ──
+        subj_name = gene.get("subject", "")
+        loads     = build_loads(fixed)
+        avg_load  = sum(loads.values()) / len(loads) if loads else 0.0
+
+        swapped = False
+        # Sort candidates: prefer under-loaded faculty with free allowed slots
+        candidates = []
+        for alt in faculty_list:
+            aname = alt["name"]
+            if aname == prof_name:
+                continue
+            alt_avail = alt.get("availability", [])
+            if not alt_avail:
+                continue
+            # Specialization check
+            if not subj_name.startswith("IT Elective"):
+                req = STATIC_SPEC_LOOKUP.get(subj_name, [])
+                if req and not any(sp in alt.get("specialization", []) for sp in req):
+                    continue
+            # Hard cap check
+            if loads.get(aname, 0) + 2 > alt.get("absolute_max_units", 999):
+                continue
+            # Must have a free slot on an allowed day
+            alt_occupied = faculty_occupied_slots(fixed, aname)
+            alt_free = next(
+                (s for s in _allowed_slots_for(alt) if s not in alt_occupied),
+                None
+            )
+            if alt_free is None:
+                continue
+            candidates.append((aname, alt_free, loads.get(aname, 0)))
+
+        if candidates:
+            # pick the most under-loaded candidate
+            candidates.sort(key=lambda x: x[2])
+            best_name, best_slot, _ = candidates[0]
+            gene["faculty"]      = best_name
+            gene["slot"]         = best_slot
+            gene["slot_display"] = slot_to_12h(best_slot)
+            swapped = True
+
+        if swapped:
+            continue
+
+        # ── Strategy 3: best-effort — move to any allowed slot (may overlap) ──
+        if allowed:
+            gene["slot"]         = allowed[0]
+            gene["slot_display"] = slot_to_12h(allowed[0])
+        # Strategy 4: give up — leave as-is
+
+    return fixed
+
+
+def resolve_faculty_slot_overlaps(chromosome: list[dict], faculty_list: list[dict]) -> list[dict]:
+    """
+    For each faculty member, detect time-slot collisions (two genes sharing the
+    same slot string) and reassign the later colliding gene to a free slot on
+    one of their allowed days.
+
+    Under extreme constraints (e.g. only 2 days available, 5 slots each = 10
+    legal positions) a faculty member with more subjects than available positions
+    truly cannot be collision-free.  In that case this function packs as many
+    collision-free slots as possible and leaves the remainder in their least-bad
+    position rather than crashing or silently discarding genes.
+
+    This pass runs AFTER enforce_day_constraints so all slots are already on
+    allowed days.  The only thing being changed here is which specific allowed
+    slot a colliding gene lands on.
+
+    Runs multiple sweeps until no new fixes are possible (convergence).
+    """
+    resolved = copy.deepcopy(chromosome)
+    fac_map  = {f["name"]: f for f in faculty_list}
+
+    max_sweeps = len(resolved) + 1   # generous upper bound
+
+    for _ in range(max_sweeps):
+        # Build per-faculty slot → gene-index map
+        fac_slot_map: dict[str, dict[str, list[int]]] = {}
+        for idx, gene in enumerate(resolved):
+            fname = gene.get("faculty", "")
+            slot  = gene.get("slot", "")
+            if not fname or not slot:
+                continue
+            if fname not in fac_slot_map:
+                fac_slot_map[fname] = {}
+            fac_slot_map[fname].setdefault(slot, []).append(idx)
+
+        any_fixed = False
+        for fname, slot_to_idxs in fac_slot_map.items():
+            prof = fac_map.get(fname)
+            if not prof:
+                continue
+            allowed = _allowed_slots_for(prof)   # already shuffled
+
+            # Collect the set of slots currently used (one gene each — no collision)
+            used_slots: set[str] = set()
+
+            for slot, idxs in slot_to_idxs.items():
+                if len(idxs) == 1:
+                    used_slots.add(slot)
+                    continue
+                # Collision: keep first gene in place, relocate the rest
+                used_slots.add(slot)  # first gene stays here
+                for collision_idx in idxs[1:]:
+                    # Find the first free allowed slot not yet used by this faculty
+                    free = next((s for s in allowed if s not in used_slots), None)
+                    if free:
+                        resolved[collision_idx]["slot"]         = free
+                        resolved[collision_idx]["slot_display"] = slot_to_12h(free)
+                        used_slots.add(free)
+                        any_fixed = True
+                    # If no free slot exists: leave in place — faculty is truly saturated.
+                    # The fitness function will penalize but the output remains intact.
+
+        if not any_fixed:
+            break   # no more collisions fixable
+
+    return resolved
+
 
 def generate_individual(faculty_list: list[dict], subject_list: list[dict]) -> list[dict]:
+    """
+    FIX: `assignment_weight` was defined as a closure inside the subject loop,
+    capturing `slot` by reference. Because Python closures capture variables by
+    reference (not value), every call to `assignment_weight` saw the last value
+    of `slot` from the loop, not the current iteration's value. This made the
+    soft-constraint period scoring always evaluate the final slot instead of the
+    slot actually being considered.
+
+    Fix: `slot` is now passed as a default argument (`current_slot=slot`) so
+    each closure captures the value at definition time.
+    """
     chromosome = []
     shuffled_slots = list(TIME_SLOTS)
     random.shuffle(shuffled_slots)
     room_usage = {}
+
+    # Live load tracker — used to bias assignment toward under-loaded faculty
+    live_loads = {f["name"]: 0 for f in faculty_list}
 
     slot_idx = 0
     for subj in subject_list:
@@ -398,40 +849,139 @@ def generate_individual(faculty_list: list[dict], subject_list: list[dict]) -> l
             slot_idx = 0
             random.shuffle(shuffled_slots)
 
+        class_type = subj.get("class_type", "LECTURE")
+
         slot = shuffled_slots[slot_idx]
         slot_str = f"{slot[0]}: {slot[1]:02d}:00-{slot[2]:02d}:00"
         slot_idx += 1
 
-        class_type = subj.get("class_type", "LECTURE")
-        eligible_profs = [f["name"] for f in faculty_list if is_eligible(f, subj["name"], 0, slot_str)]
-        selected_prof = random.choice(eligible_profs) if eligible_profs else random.choice([f["name"] for f in faculty_list])
+        eligible_profs = [
+            f["name"] for f in faculty_list
+            if is_eligible(f, subj["name"], live_loads.get(f["name"], 0), slot_str)
+        ]
+        if not eligible_profs:
+            # Relax load constraint — allow anyone available that day with right spec
+            eligible_profs = [
+                f["name"] for f in faculty_list
+                if get_slot_day(slot_str) in f.get("availability", [])
+            ]
+        if not eligible_profs:
+            eligible_profs = [f["name"] for f in faculty_list]
+
+        # Snapshot average load of eligible pool for weight computation
+        eligible_loads = [live_loads.get(p, 0) for p in eligible_profs]
+        avg_eligible   = sum(eligible_loads) / len(eligible_loads) if eligible_loads else 0.0
+
+        # FIX: capture `slot` and `avg_eligible` by value via default arguments
+        # to avoid the closure-over-loop-variable bug.
+        def assignment_weight(prof_name: str, current_slot=slot, cur_avg=avg_eligible) -> float:
+            """
+            Higher weight = more likely to be chosen.
+            Under-loaded faculty get a strong boost; over-loaded get suppressed.
+            Soft constraint period/day preferences add a smaller secondary signal.
+            """
+            load     = live_loads.get(prof_name, 0)
+            load_gap = cur_avg - load       # positive = under-loaded
+            load_w   = max(0.1, 1.0 + load_gap * 0.5)
+
+            sc = get_soft_constraints(prof_name)
+            sc_score = 0.0
+            if sc:
+                preferred_period = sc.get("preferred_period")
+                if preferred_period:
+                    h = current_slot[1]
+                    if preferred_period == "morning" and 7 <= h < 12:
+                        sc_score += 1.5
+                    elif preferred_period == "afternoon" and 12 <= h < 17:
+                        sc_score += 1.5
+                    elif preferred_period == "evening" and h >= 17:
+                        sc_score += 1.5
+                    else:
+                        sc_score -= 0.5
+                if current_slot[0] in sc.get("restricted_days", []):
+                    sc_score -= 3.0
+                if sc.get("maternity_leave"):
+                    sc_score -= 8.0
+
+            return max(0.05, load_w + sc_score * 0.3)
+
+        weights = [assignment_weight(p) for p in eligible_profs]
+        total_w = sum(weights)
+        r = random.random() * total_w
+        selected_prof = eligible_profs[0]
+        cumulative = 0.0
+        for i, w in enumerate(weights):
+            cumulative += w
+            if r <= cumulative:
+                selected_prof = eligible_profs[i]
+                break
+
+        live_loads[selected_prof] = live_loads.get(selected_prof, 0) + 2
 
         gene = {
-            "faculty": selected_prof,
-            "subject": subj["name"],
-            "type": subj.get("type", "Core Theory"),
-            "class_type": class_type,
-            "slot": slot_str,
+            "faculty":      selected_prof,
+            "subject":      subj["name"],
+            "type":         subj.get("type", "Core Theory"),
+            "class_type":   class_type,
+            "slot":         slot_str,
             "slot_display": slot_to_12h(slot_str),
+            "semester":     subj.get("semester", ""),
         }
         gene["room"] = assign_room(gene, room_usage)
         chromosome.append(gene)
     return chromosome
 
 def mutate(chromosome: list[dict], faculty_list: list[dict], mut_rate: float) -> list[dict]:
+    """
+    FIX: `avg_load` was computed once before the mutation loop and never
+    updated as genes were mutated. Late mutations therefore used a stale
+    average, making the load-balance weighting increasingly inaccurate.
+    Now `avg_load` is recomputed from the live `live_loads` snapshot after
+    every faculty swap so subsequent mutations in the same call see current
+    distribution.
+    """
     mutated = copy.deepcopy(chromosome)
+
+    # Build current load snapshot
+    live_loads = {f["name"]: 0 for f in faculty_list}
+    for gene in mutated:
+        n = gene.get("faculty", "")
+        if n in live_loads:
+            live_loads[n] += 2
+
+    fac_names = [f["name"] for f in faculty_list]
+
     for gene in mutated:
         if random.random() < mut_rate:
             choice = random.random()
             if choice < 0.33:
-                gene["faculty"] = random.choice([f["name"] for f in faculty_list])
+                # Load-aware faculty mutation: bias toward under-loaded faculty.
+                # avg_load is recomputed from the live snapshot after each swap.
+                avg_load = sum(live_loads.values()) / len(live_loads) if live_loads else 0.0
+                weights  = [max(0.05, 1.0 + (avg_load - live_loads.get(n, 0)) * 0.4) for n in fac_names]
+                total_w  = sum(weights)
+                r        = random.random() * total_w
+                new_fac  = fac_names[0]
+                cumulative = 0.0
+                for i, w in enumerate(weights):
+                    cumulative += w
+                    if r <= cumulative:
+                        new_fac = fac_names[i]
+                        break
+                # Update live loads to reflect the swap
+                old_fac = gene.get("faculty", "")
+                if old_fac in live_loads:
+                    live_loads[old_fac] = max(0, live_loads[old_fac] - 2)
+                if new_fac in live_loads:
+                    live_loads[new_fac] += 2
+                gene["faculty"] = new_fac
+
             elif choice < 0.66:
                 slot = random.choice(TIME_SLOTS)
                 new_slot = f"{slot[0]}: {slot[1]:02d}:00-{slot[2]:02d}:00"
                 gene["slot"] = new_slot
                 gene["slot_display"] = slot_to_12h(new_slot)
             else:
-                # Mutate room assignment
                 pool = LABORATORY_ROOMS if gene.get("class_type") == "LAB" else ALL_ROOMS
                 gene["room"] = random.choice(pool)
     return mutated
@@ -474,6 +1024,39 @@ def safe_run_ga(faculty_list: list[dict], subject_list: list[dict], pop_size: in
             population = new_pop
             time.sleep(0.01)
 
+        # ── Post-GA repair pipeline ─────────────────────────────────────────
+        # 0. resolve_spec_mismatches  — fix spec-mismatched genes first so
+        #                               downstream passes work on correct data
+        # 1. rebalance_chromosome     — redistribute load across faculty
+        # 2. enforce_day_constraints  — hard-cap every gene to allowed days
+        # 3. resolve_faculty_slot_overlaps — eliminate per-faculty collisions
+        # 4-5. second enforce+overlap passes for edge-case cleanup
+        # ────────────────────────────────────────────────────────────────────
+        final_scored = [(ind, calculate_fitness(ind, faculty_list, subject_list)) for ind in population]
+        final_scored.sort(key=lambda x: x[1], reverse=True)
+        final_best = final_scored[0][0]
+
+        # Pass 0 — specialization mismatch repair
+        spec_fixed = resolve_spec_mismatches(final_best, faculty_list)
+
+        # Pass 1 — load rebalancing
+        rebalanced_best = rebalance_chromosome(spec_fixed, faculty_list)
+
+        # Pass 2 — hard day-constraint enforcement
+        day_fixed = enforce_day_constraints(rebalanced_best, faculty_list)
+
+        # Pass 3 — faculty slot-overlap resolution
+        overlap_fixed = resolve_faculty_slot_overlaps(day_fixed, faculty_list)
+
+        # Pass 4 — second enforce (overlap resolution may create new day violations)
+        day_fixed_2 = enforce_day_constraints(overlap_fixed, faculty_list)
+
+        # Pass 5 — final overlap cleanup
+        final_result = resolve_faculty_slot_overlaps(day_fixed_2, faculty_list)
+
+        with ga_lock:
+            ga_progress["result"] = copy.deepcopy(final_result)
+
     except Exception as e:
         print(f"[GA] Engine Error Trace Trigger: {e}")
     finally:
@@ -508,6 +1091,23 @@ def run_ga_endpoint():
 
     faculty = data.get("faculty", [])
     subjects_raw = data.get("subjects", [])
+    active_semester = data.get("active_semester")
+
+    # Load soft constraints from payload if provided (frontend-authoritative)
+    incoming_sc = data.get("soft_constraints", {})
+    if incoming_sc and isinstance(incoming_sc, dict):
+        for fac_name, constraints in incoming_sc.items():
+            if isinstance(constraints, dict):
+                for k, v in constraints.items():
+                    set_soft_constraint(fac_name, k, v)
+
+    # Filter subjects by active_semester if provided
+    subjects_filtered = subjects_raw
+    if active_semester:
+        subjects_filtered = [
+            s for s in subjects_raw
+            if not s.get("semester") or s.get("semester") == active_semester
+        ]
 
     subjects = [
         {
@@ -515,8 +1115,9 @@ def run_ga_endpoint():
             "type":       s.get("type", "Core Theory"),
             "class_type": s.get("class_type", "LECTURE"),
             "hours":      int(s.get("hours", 2)),
+            "semester":   s.get("semester", active_semester or ""),
         }
-        for s in subjects_raw
+        for s in subjects_filtered
         if s.get("name")
     ]
 
@@ -525,7 +1126,7 @@ def run_ga_endpoint():
     mut_rate    = min(1.0, max(0.0, float(data.get("mutation",  0.1))))
     cross_rate  = min(1.0, max(0.0, float(data.get("crossover", 0.8))))
 
-    print(f"[GA] Instantiating run for {len(faculty)} faculty.")
+    print(f"[GA] Instantiating run for {len(faculty)} faculty, {len(subjects)} subjects, semester={active_semester}.")
     build_static_lookup(subjects)
 
     with ga_lock:

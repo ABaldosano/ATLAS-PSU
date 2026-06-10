@@ -73,8 +73,11 @@
       <!-- PANEL 0: DASHBOARD -->
       <section class="panel" id="panel-dashboard" aria-label="Dashboard">
         <div class="page-header">
-          <h2>Faculty Optimization Dashboard</h2>
-          <p>Real-time academic workload analytics and faculty distribution insights powered by genetic algorithm optimization.</p>
+          <div>
+            <h2>Faculty Optimization Dashboard</h2>
+            <p>Real-time academic workload analytics and faculty distribution insights powered by genetic algorithm optimization.</p>
+          </div>
+          <div id="dashboardSemContext" class="sem-context-badge" style="display:none;"></div>
         </div>
 
         <div class="stats-row">
@@ -113,8 +116,11 @@
       <!-- PANEL 1: WORKLOAD OPTIMIZATION -->
       <section class="panel" aria-label="Workload Optimization">
         <div class="page-header">
-          <h2>Workload Optimization Engine</h2>
-          <p>Generate balanced faculty schedules using adaptive genetic optimization with real-time progress visualization.</p>
+          <div>
+            <h2>Workload Optimization Engine</h2>
+            <p>Generate balanced faculty schedules using adaptive genetic optimization with real-time progress visualization.</p>
+          </div>
+          <div id="optimizationSemContext" class="sem-context-badge" style="display:none;"></div>
         </div>
 
         <div class="workload-grid">
@@ -194,8 +200,11 @@
       <!-- PANEL 2: REPORTS -->
       <section class="panel" id="reportsPanel" aria-label="Faculty Analytics and Reports">
         <div class="page-header">
-          <h2>Faculty Analytics &amp; Reports</h2>
-          <p>Visual workload distribution, scheduling metrics, and export-ready institutional summaries.</p>
+          <div>
+            <h2>Faculty Analytics &amp; Reports</h2>
+            <p>Visual workload distribution, scheduling metrics, and export-ready institutional summaries.</p>
+          </div>
+          <div id="reportsSemContext" class="sem-context-badge" style="display:none;"></div>
         </div>
 
         <div class="reports-charts-grid">
@@ -332,29 +341,38 @@
         </div>
 
         <!-- ── ACADEMIC YEAR & SEMESTER MODE ── -->
-        <h3 class="section-heading">Academic Year Mode</h3>
-        <div class="room-section-card" style="max-width:480px;margin-bottom:24px;">
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <div class="modal-form-group" style="margin:0;">
-              <label for="academicYear">Academic Year</label>
-              <input type="text" id="academicYear" placeholder="e.g. 2024–2025" style="max-width:220px;">
+        <h3 class="section-heading">Academic Year &amp; Semester</h3>
+        <div class="academic-mode-card" id="academicModeCard">
+          <div class="academic-mode-header">
+            <div>
+              <div class="academic-mode-header-title">Active Academic Period</div>
+              <div class="academic-mode-header-sub">Controls which subjects are included in optimization, scheduling, reports, and all computations.</div>
             </div>
-            <div class="modal-form-group" style="margin:0;">
+          </div>
+          <div id="academicModeActiveBanner" class="academic-active-banner hidden">
+            <span class="academic-active-dot"></span>
+            <span id="academicActiveBannerText">No period set</span>
+          </div>
+          <div class="academic-mode-form-row">
+            <div class="modal-form-group" style="margin:0;flex:1;min-width:160px;">
+              <label for="academicYear">Academic Year</label>
+              <input type="text" id="academicYear" placeholder="e.g. 2024–2025">
+            </div>
+            <div class="modal-form-group" style="margin:0;flex:1;min-width:160px;">
               <label for="academicSemester">Semester</label>
-              <select id="academicSemester" style="max-width:220px;">
+              <select id="academicSemester">
                 <option value="1st Semester">1st Semester</option>
                 <option value="2nd Semester">2nd Semester</option>
                 <option value="Summer">Summer</option>
               </select>
             </div>
-            <div>
-              <button class="btn" id="saveAcademicMode" style="padding:0.4rem 1rem;font-size:0.875rem;">Save</button>
-              <span id="academicModeSaved" style="margin-left:10px;font-size:0.8rem;color:var(--clr-success-500);display:none;">Saved!</span>
+            <div class="academic-mode-save-col">
+              <button class="btn" id="saveAcademicMode">Set Active Period</button>
+              <span id="academicModeSaved" class="academic-saved-flash" style="display:none;">Saved</span>
             </div>
-            <div class="modal-info-strip" id="academicModeDisplay">
-              <span class="modal-info-dot"></span>
-              <span id="academicModeLabel">No academic mode set.</span>
-            </div>
+          </div>
+          <div class="academic-mode-warning">
+            Only subjects tagged for the active semester will be scheduled, evaluated, and exported. Cross-semester subjects are excluded from all computations.
           </div>
         </div>
 
@@ -562,4 +580,4 @@
   </script>
 
 </body>
-</html> 
+</html>
