@@ -364,11 +364,10 @@ def calculate_fitness(chromosome: list[dict], faculty_list: list[dict], subject_
             penalty += 15
             continue
 
-        # Double booking check (slot uniqueness per subject+section)
-        section_slot_key = f"{section}|{slot}"
-        if section_slot_key in slot_assigned:
+        # Double booking check (slot uniqueness per subject section)
+        if slot in slot_assigned:
             penalty += 40
-        slot_assigned.add(section_slot_key)
+        slot_assigned.add(slot)
 
         # Professor cross-section conflict: same prof, same slot, different section
         if prof_name not in prof_slot_sections:
@@ -389,7 +388,7 @@ def calculate_fitness(chromosome: list[dict], faculty_list: list[dict], subject_
         if room:
             room_slot_key = f"{room}|{slot}"
             if room_slot_key in room_slot_used:
-                penalty += 60
+                penalty += 35
             room_slot_used.add(room_slot_key)
 
         prof = fac_map.get(prof_name)
@@ -402,7 +401,9 @@ def calculate_fitness(chromosome: list[dict], faculty_list: list[dict], subject_
         if day not in prof.get("availability", []):
             penalty += 45
 
-        prof_loads[prof_name] += gene.get("hours", 2)
+        prof_loads[prof_name] += 2
+
+        req_specs = STATIC_SPEC_LOOKUP.get(subj_name, [])
         if any(sp in prof.get("specialization", []) for sp in req_specs):
             matches += 1
         else:
@@ -767,56 +768,6 @@ def enforce_day_constraints(chromosome: list[dict], faculty_list: list[dict]) ->
     return fixed
 
 
-def resolve_room_conflicts(chromosome: list[dict]) -> list[dict]:
-    """
-    Post-GA pass: detect room+slot collisions (two genes using same room at same time)
-    and reassign the conflicting gene to a free room of the appropriate type.
-    This directly fixes the CL2 Mon 3-5PM style double-booking seen in outputs.
-    """
-    resolved = copy.deepcopy(chromosome)
-    max_sweeps = len(resolved) + 1
-
-    for _ in range(max_sweeps):
-        room_slot_map: dict[str, list[int]] = {}
-        for idx, gene in enumerate(resolved):
-            room = gene.get("room", "")
-            slot = gene.get("slot", "")
-            if not room or not slot:
-                continue
-            key = f"{room}|{slot}"
-            room_slot_map.setdefault(key, []).append(idx)
-
-        any_fixed = False
-        used_keys: set[str] = {k for k, v in room_slot_map.items() if len(v) == 1}
-
-        for key, idxs in room_slot_map.items():
-            if len(idxs) <= 1:
-                continue
-            # Keep first, reassign the rest
-            for conflict_idx in idxs[1:]:
-                gene = resolved[conflict_idx]
-                slot = gene.get("slot", "")
-                class_type = gene.get("class_type", "LECTURE")
-                pool = LABORATORY_ROOMS + ALL_ROOMS if class_type == "LAB" else ALL_ROOMS
-                candidates = pool[:]
-                random.shuffle(candidates)
-                new_room = None
-                for room in candidates:
-                    new_key = f"{room}|{slot}"
-                    if new_key not in used_keys:
-                        new_room = room
-                        used_keys.add(new_key)
-                        break
-                if new_room:
-                    gene["room"] = new_room
-                    any_fixed = True
-
-        if not any_fixed:
-            break
-
-    return resolved
-
-
 def resolve_faculty_slot_overlaps(chromosome: list[dict], faculty_list: list[dict]) -> list[dict]:
     """
     For each faculty member, detect time-slot collisions (two genes sharing the
@@ -1090,8 +1041,8 @@ def crossover(parent1: list[dict], parent2: list[dict], cross_rate: float) -> tu
     if random.random() > cross_rate:
         return copy.deepcopy(parent1), copy.deepcopy(parent2)
     point = random.randint(1, len(parent1) - 1)
-    child1 = copy.deepcopy(parent1[:point]) + copy.deepcopy(parent2[point:])
-    child2 = copy.deepcopy(parent2[:point]) + copy.deepcopy(parent1[point:])
+    child1 = parent1[:point] + parent2[point:]
+    child2 = parent2[:point] + parent1[point:]
     return child1, child2
 
 # ============================================================
@@ -1152,10 +1103,7 @@ def safe_run_ga(faculty_list: list[dict], subject_list: list[dict], pop_size: in
         day_fixed_2 = enforce_day_constraints(overlap_fixed, faculty_list)
 
         # Pass 5 — final overlap cleanup
-        overlap_final = resolve_faculty_slot_overlaps(day_fixed_2, faculty_list)
-
-        # Pass 6 — room conflict resolution (eliminates same-room same-slot collisions)
-        final_result = resolve_room_conflicts(overlap_final)
+        final_result = resolve_faculty_slot_overlaps(day_fixed_2, faculty_list)
 
         with ga_lock:
             ga_progress["result"] = copy.deepcopy(final_result)
@@ -1181,16 +1129,6 @@ def preload_ai_cache(subjects: list[dict]) -> None:
 # ============================================================
 # API CONTROLLERS
 # ============================================================
-@app.route("/preload-cache", methods=["POST"])
-def preload_cache_endpoint():
-    data = request.get_json() or {}
-    subjects = data.get("subjects", [])
-    if not subjects:
-        return jsonify({"error": "subjects list required"}), 400
-    preload_ai_cache(subjects)
-    return jsonify({"status": "preload started", "count": len(subjects)})
-
-
 @app.route("/run-ga", methods=["POST"])
 def run_ga_endpoint():
     global ga_progress
@@ -1229,7 +1167,7 @@ def run_ga_endpoint():
         year = s.get("year", "")
         # Find sections for this year level
         sections_for_year = [
-            key for key, val in class_sizes_store.items()
+            key for key, val in DEFAULT_CLASS_SIZES.items()
             if val["year"] == year
         ] if year else []
         # If no sections found (unknown year), treat as one unnamed section
