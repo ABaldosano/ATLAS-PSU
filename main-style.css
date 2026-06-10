@@ -463,7 +463,7 @@ code {
   height: calc(100vh - var(--nav-h));
   margin-top: var(--nav-h);
   overflow: hidden;
-  padding: var(--space-5);
+  padding: var(--space-5) var(--space-5) 0;
 }
 
 .panels-container {
@@ -479,7 +479,7 @@ code {
   overflow-x: hidden;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   padding: var(--space-8) var(--space-10);
   box-shadow: var(--card-shadow);
   position: relative;
@@ -2367,7 +2367,7 @@ body.page-login {
 
   .search-box { display: none; }
 
-  .panels-wrapper { padding: var(--space-3); }
+  .panels-wrapper { padding: var(--space-3) var(--space-3) 0; }
 
   .panel { padding: var(--space-5) var(--space-4); }
 
