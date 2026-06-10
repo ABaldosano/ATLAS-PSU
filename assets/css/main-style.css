@@ -3201,3 +3201,115 @@ body.page-login {
 
 .txt-center { text-align: center; }
 .font-mono  { font-family: var(--font-mono); }
+
+/* ============================================================
+   FAC-ASSIGN CARD — POLISHED LAYOUT (patched)
+   ============================================================ */
+
+/* Header: name + count stacked, units badge + edit button right-aligned */
+.fac-assign-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.fac-assign-header-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+.fac-assign-name {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: unset;
+}
+.fac-assign-count {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Compact edit button in card header */
+.fac-assign-header .btn-edit-faculty {
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  opacity: 0.75;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+.fac-assign-header .btn-edit-faculty:hover { opacity: 1; }
+
+/* List item row */
+.fac-assign-item-full {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.fac-assign-item-full:last-child { border-bottom: none; }
+
+/* Color dot indicating LECTURE vs LAB */
+.fac-assign-ct-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-top: 5px;
+}
+.ct-dot-lecture { background: var(--clr-primary-400); }
+.ct-dot-lab     { background: #f59e0b; }
+
+/* Subject name */
+.fac-assign-subject-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Meta row: type tag + section + slot + room */
+.fac-assign-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+}
+.fac-assign-section {
+  font-size: 0.6rem !important;
+  padding: 0.1rem 0.35rem !important;
+}
+.fac-assign-slot {
+  font-size: 0.67rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.fac-assign-room {
+  font-size: 0.67rem;
+  font-weight: 600;
+  color: var(--clr-primary-600);
+  background: var(--clr-primary-50);
+  border: 1px solid var(--clr-primary-100);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}

@@ -117,6 +117,15 @@ def _solve_with_ortools(sections: list, faculty_list: list, static_lookup: dict,
             if len(vars_ft) > 1:
                 model.AddAtMostOne(vars_ft)
 
+    # Constraint 2b: no section double-booking (a section can't have 2 subjects at same slot)
+    section_list = list(set(sec.get("section", "") for sec in sections if sec.get("section", "")))
+    for sec_key in section_list:
+        sec_indices = [i for i, sec in enumerate(sections) if sec.get("section", "") == sec_key]
+        for t_idx in range(n_slots):
+            vars_st = [x[k] for k in x if k[0] in sec_indices and k[2] == t_idx]
+            if len(vars_st) > 1:
+                model.AddAtMostOne(vars_st)
+
     # Constraint 3: faculty load ≤ absolute_max_units
     for f_idx, fac in enumerate(faculty_list):
         vars_f = [x[k] for k in x if k[1] == f_idx]
@@ -202,6 +211,7 @@ def _solve_with_backtracking(sections: list, faculty_list: list, static_lookup: 
     fac_slot_used: dict[str, set] = {f["name"]: set() for f in faculty_list}
     fac_loads: dict[str, int] = {f["name"]: 0 for f in faculty_list}
     room_slot_used: set = set()
+    section_slot_used: dict[str, set] = {}
     result: list = []
 
     def _attempt(idx: int) -> bool:
@@ -230,6 +240,9 @@ def _solve_with_backtracking(sections: list, faculty_list: list, static_lookup: 
                 continue
             if not faculty_load_ok(fac_loads[fac_name], fac):
                 continue
+            _sec_key = sec.get("section", "")
+            if _sec_key and slot in section_slot_used.get(_sec_key, set()):
+                continue
 
             # Try to assign a room
             class_type = sec.get("class_type", "LECTURE")
@@ -243,6 +256,9 @@ def _solve_with_backtracking(sections: list, faculty_list: list, static_lookup: 
             fac_loads[fac_name] += UNITS_PER_ASSIGNMENT
             room_key = f"{room}|{slot}"
             room_slot_used.add(room_key)
+            _sec_key = sec.get("section", "")
+            if _sec_key:
+                section_slot_used.setdefault(_sec_key, set()).add(slot)
 
             result.append({
                 "faculty":      fac_name,
@@ -265,6 +281,9 @@ def _solve_with_backtracking(sections: list, faculty_list: list, static_lookup: 
             fac_slot_used[fac_name].discard(slot)
             fac_loads[fac_name] -= UNITS_PER_ASSIGNMENT
             room_slot_used.discard(room_key)
+            _sec_key = sec.get("section", "")
+            if _sec_key:
+                section_slot_used.get(_sec_key, set()).discard(slot)
 
         # No valid assignment found — insert unassigned placeholder and continue
         # This prevents total failure on impossible sub-problems
@@ -296,6 +315,7 @@ def _repair_unassigned(assignments: list, faculty_list: list, static_lookup: dic
     fac_slot_used: dict[str, set] = {f["name"]: set() for f in faculty_list}
     fac_loads: dict[str, int] = {f["name"]: 0 for f in faculty_list}
     room_slot_used: set = set()
+    section_slot_used: dict[str, set] = {}
 
     # Build state from already-valid assignments
     for a in assignments:
@@ -304,6 +324,9 @@ def _repair_unassigned(assignments: list, faculty_list: list, static_lookup: dic
             fac_loads[a["faculty"]] = fac_loads.get(a["faculty"], 0) + UNITS_PER_ASSIGNMENT
         if a["room"] != "Unassigned":
             room_slot_used.add(f"{a['room']}|{a['slot']}")
+        _sec_key = a.get("section", "")
+        if _sec_key:
+            section_slot_used.setdefault(_sec_key, set()).add(a["slot"])
 
     repaired = []
     for a in assignments:
@@ -313,6 +336,7 @@ def _repair_unassigned(assignments: list, faculty_list: list, static_lookup: dic
 
         # Find best faculty for this unassigned item
         fac_name = ""
+        _sec_key = a.get("section", "")
         for fac in sorted(faculty_list, key=lambda f: fac_loads.get(f["name"], 0)):
             if not faculty_qualifies(fac, a["subject"], static_lookup):
                 continue
@@ -321,6 +345,8 @@ def _repair_unassigned(assignments: list, faculty_list: list, static_lookup: dic
             if not faculty_load_ok(fac_loads.get(fac["name"], 0), fac):
                 continue
             if a["slot"] in fac_slot_used.get(fac["name"], set()):
+                continue
+            if _sec_key and a["slot"] in section_slot_used.get(_sec_key, set()):
                 continue
             fac_name = fac["name"]
             break
@@ -346,6 +372,8 @@ def _repair_unassigned(assignments: list, faculty_list: list, static_lookup: dic
             fac_loads[fac_name] = fac_loads.get(fac_name, 0) + UNITS_PER_ASSIGNMENT
         if room != "Unassigned":
             room_slot_used.add(f"{room}|{chosen_slot}")
+        if _sec_key:
+            section_slot_used.setdefault(_sec_key, set()).add(chosen_slot)
 
         repaired.append({**a, "faculty": fac_name, "slot": chosen_slot,
                           "slot_display": _slot_to_12h(chosen_slot), "room": room})

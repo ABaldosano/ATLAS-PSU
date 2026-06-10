@@ -1095,6 +1095,64 @@ function loadFacultyFromStorage() {
   }
 }
 
+function initEditFacultyModal() {
+  const modal       = document.getElementById('editModal');
+  const closeBtn    = document.getElementById('editModalClose');
+  const cancelBtn   = document.getElementById('editModalCancel');
+  const saveBtn     = document.getElementById('editModalSave');
+  const nameInput   = document.getElementById('editFacultyName');
+  const unitsInput  = document.getElementById('editMaxUnits');
+  const titleEl     = document.getElementById('editModalTitle');
+  if (!modal) return;
+
+  function openModal(facultyName) {
+    const rows = Array.from(document.querySelectorAll('#facultyTable tbody tr'));
+    const row  = rows.find(r => r.querySelector('input[type="text"]')?.value.trim() === facultyName);
+    const currentUnits = row ? (parseInt(row.querySelector('input[type="number"]')?.value, 10) || 24) : 24;
+    nameInput.value   = facultyName;
+    unitsInput.value  = currentUnits;
+    if (titleEl) titleEl.textContent = `Edit — ${facultyName}`;
+    modal.classList.add('open');
+    modal.removeAttribute('aria-hidden');
+    unitsInput.focus();
+  }
+
+  function closeModal() {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  // Delegate: reports table Edit button
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-edit-faculty');
+    if (!btn) return;
+    e.stopPropagation();
+    openModal(btn.dataset.faculty);
+  });
+
+  if (closeBtn)  closeBtn.addEventListener('click',  closeModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('open')) closeModal(); });
+
+  if (saveBtn) {
+    saveBtn.addEventListener('click', () => {
+      const name     = nameInput.value.trim();
+      const newUnits = parseInt(unitsInput.value, 10);
+      if (!name || isNaN(newUnits) || newUnits < 0) return;
+
+      const rows = Array.from(document.querySelectorAll('#facultyTable tbody tr'));
+      const row  = rows.find(r => r.querySelector('input[type="text"]')?.value.trim() === name);
+      if (row) {
+        const numInput = row.querySelector('input[type="number"]');
+        if (numInput) { numInput.value = newUnits; saveFaculty(); }
+      }
+      closeModal();
+      showToast(`${name} — max units updated to ${newUnits}.`);
+    });
+  }
+}
+
 function initFacultyManagement() {
   const addBtn = document.getElementById('addFacultyRow');
   if (addBtn) {
@@ -1104,6 +1162,7 @@ function initFacultyManagement() {
       updateAllSelectAllBtnStates();
     });
   }
+  initEditFacultyModal();
 
   // Bind Select-All-Day buttons in the Availability header
   document.querySelectorAll('.btn-select-day').forEach(btn => {
@@ -1319,36 +1378,49 @@ function renderDashboardAssignments(data) {
     const units = items.length * 2;
     const colorClass = units > MAX_UNITS ? 'units-over' : units === MAX_UNITS ? 'units-max' : 'units-ok';
 
+    // Sort items: by subject name then section
+    const sorted = [...items].sort((a, b) => {
+      const sc = (a.subject || '').localeCompare(b.subject || '');
+      if (sc !== 0) return sc;
+      return (a.section || '').localeCompare(b.section || '');
+    });
+
+    // Group rows by subject for a cleaner visual
+    const rows = sorted.map(item => {
+      const ctClass = (item.class_type || 'LECTURE').toLowerCase();
+      const displaySlot = item.slot_display || item.slot || '';
+      const dayAbbr = (item.slot || '').split(':')[0].trim();
+      const sectionHTML = item.section
+        ? `<span class="section-badge fac-assign-section">${escapeHTML(item.section)}</span>`
+        : '';
+      return `
+        <li class="fac-assign-item-full">
+          <span class="fac-assign-ct-dot ct-dot-${ctClass}"></span>
+          <span class="fac-assign-item-inner">
+            <span class="fac-assign-subject-name" title="${escapeAttr(item.subject)}">${escapeHTML(item.subject)}</span>
+            <span class="fac-assign-meta">
+              <span class="class-type-tag ${ctClass}">${escapeHTML(item.class_type || 'LECTURE')}</span>
+              ${sectionHTML}
+              ${displaySlot ? `<span class="fac-assign-slot slot-day-${escapeHTML(dayAbbr)}">${escapeHTML(displaySlot)}</span>` : ''}
+              ${item.room ? `<span class="fac-assign-room">${escapeHTML(item.room)}</span>` : ''}
+            </span>
+          </span>
+        </li>`;
+    }).join('');
+
     html += `
       <div class="fac-assign-card">
         <div class="fac-assign-header">
           <span class="fac-assign-avatar">${escapeHTML(faculty.charAt(0))}</span>
-          <span class="fac-assign-name">${escapeHTML(faculty)}</span>
+          <div class="fac-assign-header-info">
+            <span class="fac-assign-name">${escapeHTML(faculty)}</span>
+            <span class="fac-assign-count">${items.length} assignment${items.length !== 1 ? 's' : ''}</span>
+          </div>
           <span class="units-badge ${colorClass}">${units}u</span>
+          <button class="btn-edit-faculty btn" data-faculty="${escapeAttr(faculty)}" title="Edit ${escapeAttr(faculty)}">&#9998;</button>
         </div>
         <div class="fac-assign-body">
-          <ul class="fac-assign-list">
-            ${items.map(item => {
-              const ctClass = (item.class_type || 'LECTURE').toLowerCase();
-              const displaySlot = item.slot_display || item.slot || '';
-              const sectionHTML = item.section
-                ? `<span class="section-badge" style="font-size:0.62rem;padding:0.1rem 0.4rem;">${escapeHTML(item.section)}</span>`
-                : (item.year ? getSectionBadgeHTML(item.year) : '');
-              return `
-                <li class="fac-assign-item-full">
-                  <span class="dot"></span>
-                  <span class="fac-assign-item-inner">
-                    <span class="name" title="${escapeAttr(item.subject)}">${escapeHTML(item.subject)}</span>
-                    <span class="fac-assign-meta">
-                      <span class="class-type-tag ${ctClass}" style="font-size:0.6rem;padding:1px 5px;">${escapeHTML(item.class_type || 'LECTURE')}</span>
-                      ${sectionHTML}
-                      ${displaySlot ? `<span class="fac-assign-slot">${escapeHTML(displaySlot)}</span>` : ''}
-                      ${item.room ? `<span class="tt-room-tag" style="font-size:0.65rem;"> ${escapeHTML(item.room)}</span>` : ''}
-                    </span>
-                  </span>
-                </li>`;
-            }).join('')}
-          </ul>
+          <ul class="fac-assign-list">${rows}</ul>
         </div>
       </div>
     `;
