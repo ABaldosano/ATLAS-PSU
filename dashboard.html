@@ -179,7 +179,9 @@
                     <th data-key="faculty">Faculty <span class="sort-arrow">&#9650;</span></th>
                     <th data-key="subject">Subject <span class="sort-arrow">&#9650;</span></th>
                     <th data-key="type">Type <span class="sort-arrow">&#9650;</span></th>
+                    <th data-key="class_type">Class <span class="sort-arrow">&#9650;</span></th>
                     <th data-key="slot">Slot <span class="sort-arrow">&#9650;</span></th>
+                    <th data-key="room">Room <span class="sort-arrow">&#9650;</span></th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -326,8 +328,174 @@
       <section class="panel" aria-label="Settings">
         <div class="page-header">
           <h2>Settings</h2>
-          <p>System configuration and preferences.</p>
+          <p>Room management, class sizes, professor preferences, and system configuration.</p>
         </div>
+
+        <!-- ── ACADEMIC YEAR & SEMESTER MODE ── -->
+        <h3 class="section-heading">Academic Year Mode</h3>
+        <div class="room-section-card" style="max-width:480px;margin-bottom:24px;">
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div class="modal-form-group" style="margin:0;">
+              <label for="academicYear">Academic Year</label>
+              <input type="text" id="academicYear" placeholder="e.g. 2024–2025" style="max-width:220px;">
+            </div>
+            <div class="modal-form-group" style="margin:0;">
+              <label for="academicSemester">Semester</label>
+              <select id="academicSemester" style="max-width:220px;">
+                <option value="1st Semester">1st Semester</option>
+                <option value="2nd Semester">2nd Semester</option>
+                <option value="Summer">Summer</option>
+              </select>
+            </div>
+            <div>
+              <button class="btn" id="saveAcademicMode" style="padding:0.4rem 1rem;font-size:0.875rem;">Save</button>
+              <span id="academicModeSaved" style="margin-left:10px;font-size:0.8rem;color:var(--clr-success-500);display:none;">Saved!</span>
+            </div>
+            <div class="modal-info-strip" id="academicModeDisplay">
+              <span class="modal-info-dot"></span>
+              <span id="academicModeLabel">No academic mode set.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── ROOM MANAGEMENT ── -->
+        <h3 class="section-heading">Room Management</h3>
+        <div class="rooms-grid">
+          <div class="room-section-card">
+            <div class="room-section-header">
+              <span class="room-section-title">Lecture Rooms</span>
+              <button class="btn btn-secondary" id="addLectureRoom" style="padding:0.3rem 0.75rem;font-size:0.8rem;">+ Add Room</button>
+            </div>
+            <div id="lectureRoomsList" class="room-list"></div>
+          </div>
+          <div class="room-section-card">
+            <div class="room-section-header">
+              <span class="room-section-title">Laboratory Rooms</span>
+              <button class="btn btn-secondary" id="addLabRoom" style="padding:0.3rem 0.75rem;font-size:0.8rem;">+ Add Room</button>
+            </div>
+            <div id="labRoomsList" class="room-list"></div>
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:10px;">
+          <button class="btn" id="saveRooms">Save Rooms</button>
+          <button class="btn btn-secondary" id="resetRooms">Reset to Defaults</button>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- ── CLASS SIZES ── -->
+        <h3 class="section-heading">Class Sizes</h3>
+        <div class="faculty-scroll-wrap" style="margin-bottom:16px;">
+          <table id="classSizesTable">
+            <thead>
+              <tr>
+                <th>Section</th>
+                <th>Year</th>
+                <th>Block</th>
+                <th>Class Size</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn" id="saveClassSizes">Save Class Sizes</button>
+          <button class="btn btn-secondary" id="addClassSizeRow">+ Add Section</button>
+          <button class="btn btn-secondary" id="resetClassSizes">Reset to Defaults</button>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- ── SOFT CONSTRAINTS (PROFESSOR PREFERENCES) ── -->
+        <h3 class="section-heading">Professor Preferences</h3>
+        <p style="margin-bottom:16px;font-size:0.875rem;color:var(--text-secondary);">Set soft scheduling constraints for faculty. These influence optimization scoring without hard-blocking assignments.</p>
+
+        <div class="soft-constraint-select-row">
+          <label for="scFacultySelect" style="font-size:0.8125rem;font-weight:600;color:var(--text-primary);white-space:nowrap;">Faculty Member</label>
+          <select id="scFacultySelect" style="max-width:280px;"></select>
+          <button class="btn btn-secondary" id="scLoadBtn" style="padding:0.4rem 0.875rem;font-size:0.8rem;">Load Preferences</button>
+        </div>
+
+        <div id="softConstraintForm" class="soft-constraint-form hidden">
+          <div class="sc-form-grid">
+            <div class="modal-form-group">
+              <label for="scPreferredPeriod">Preferred Teaching Period</label>
+              <select id="scPreferredPeriod">
+                <option value="">— No Preference —</option>
+                <option value="morning">Morning (7 AM – 12 PM)</option>
+                <option value="afternoon">Afternoon (12 PM – 5 PM)</option>
+                <option value="evening">Evening (5 PM onwards)</option>
+              </select>
+            </div>
+            <div class="modal-form-group">
+              <label for="scPreferredRoom">Room Preference</label>
+              <select id="scPreferredRoom">
+                <option value="">— No Preference —</option>
+              </select>
+            </div>
+            <div class="modal-form-group">
+              <label for="scPreferredBuilding">Building Preference</label>
+              <select id="scPreferredBuilding">
+                <option value="">— No Preference —</option>
+                <option value="CL">CL Building</option>
+                <option value="IT Room">IT Room Building</option>
+                <option value="GA Bldg">GA Building</option>
+                <option value="MTC">MTC Building</option>
+                <option value="NIT">NIT Building</option>
+              </select>
+            </div>
+            <div class="modal-form-group">
+              <label for="scPreferredFloor">Floor Preference</label>
+              <select id="scPreferredFloor">
+                <option value="">— No Preference —</option>
+                <option value="1">Floor 1</option>
+                <option value="2">Floor 2</option>
+                <option value="3">Floor 3</option>
+                <option value="4">Floor 4</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="modal-form-group" style="margin-top:8px;">
+            <label>Day Restrictions (days to avoid scheduling)</label>
+            <div class="avail-checkboxes sc-day-restrict">
+              <label><input type="checkbox" value="Mon" class="sc-restrict-day"> Mon</label>
+              <label><input type="checkbox" value="Tue" class="sc-restrict-day"> Tue</label>
+              <label><input type="checkbox" value="Wed" class="sc-restrict-day"> Wed</label>
+              <label><input type="checkbox" value="Thu" class="sc-restrict-day"> Thu</label>
+              <label><input type="checkbox" value="Fri" class="sc-restrict-day"> Fri</label>
+              <label><input type="checkbox" value="Sat" class="sc-restrict-day"> Sat</label>
+            </div>
+          </div>
+
+          <div class="sc-leave-section">
+            <div class="modal-form-group">
+              <label>Date Unavailability (specific dates to avoid)</label>
+              <div id="unavailDatesContainer" class="date-list-container"></div>
+              <button type="button" class="btn btn-secondary" id="addUnavailDate" style="margin-top:8px;padding:0.3rem 0.75rem;font-size:0.8rem;">+ Add Date</button>
+            </div>
+
+            <div class="modal-form-group">
+              <label>Leave Dates (date range)</label>
+              <div id="leaveDatesContainer" class="date-list-container"></div>
+              <button type="button" class="btn btn-secondary" id="addLeaveDate" style="margin-top:8px;padding:0.3rem 0.75rem;font-size:0.8rem;">+ Add Leave Period</button>
+            </div>
+
+            <div class="modal-form-group">
+              <label class="sc-checkbox-label">
+                <input type="checkbox" id="scMaternityLeave">
+                <span>Maternity Leave</span>
+              </label>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;margin-top:16px;">
+            <button class="btn" id="scSaveBtn">Save Preferences</button>
+            <button class="btn btn-secondary" id="scClearBtn">Clear Preferences</button>
+          </div>
+        </div>
+
       </section>
 
     </div><!-- /.panels-container -->
@@ -394,4 +562,4 @@
   </script>
 
 </body>
-</html>
+</html> 

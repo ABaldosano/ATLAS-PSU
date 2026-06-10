@@ -24,71 +24,107 @@ const DAY_COLORS = {
 
 const MAX_UNITS = 24;
 
-const DATA_VERSION = 'v2'; // bump to wipe stale localStorage on deploy
+const DATA_VERSION = 'v3'; // bump to wipe stale localStorage on deploy
 
 const SPECIALIZATIONS = [
-  'Computer Science Education',
-  'Software Engineering / Programming Languages',
-  'Applied Mathematics / Theoretical Computer Science',
-  'Human-Computer Interaction (HCI)',
-  'Computer Graphics / Visual Computing',
-  'Algorithms & Data Structures / Theoretical Computer Science',
-  'Information Technology (General Elective)',
-  'Data Science / Applied Mathematics',
-  'Information Systems / Database Management',
-  'Operations Research / Computational Modelling',
-  'Computer Networks',
-  'Software Engineering / Systems Integration',
-  'Systems Architecture / Enterprise Systems',
-  'Database Systems / Information Systems',
-  'Computer Networks / Network Engineering',
-  'Cybersecurity / Information Assurance',
-  'Web Development / Web Technologies',
-  'Multimedia Computing / Digital Media',
-  'Emerging Technologies / Application Development',
-  'Geographic Information Systems (GIS)',
-  'Embedded Systems Engineering'
+  'Core Theory',
+  'Programming',
+  'Systems',
+  'Data Management',
+  'Networks & Security',
+  'Applied Computing',
+  'Mathematics',
+  'Web & App Dev',
+  'Research & Capstone',
+  'Industry Practice',
+  'Elective'
 ];
 
+const SUBJECT_TYPES = [
+  'Core Theory',
+  'Programming',
+  'Systems',
+  'Data Management',
+  'Networks & Security',
+  'Applied Computing',
+  'Mathematics',
+  'Web & App Dev',
+  'Research & Capstone',
+  'Industry Practice',
+  'Elective'
+];
+
+const LECTURE_ROOMS = [
+  'CL1','CL2','CL3',
+  'IT Room 1','IT Room 2','IT Room 3',
+  'GA Bldg 16','GA Bldg 17','GA Bldg 18','GA Bldg 19','GA Bldg 20',
+  'GA Bldg 21','GA Bldg 22','GA Bldg 23','GA Bldg 24','GA Bldg 25'
+];
+
+const LABORATORY_ROOMS = ['MTC1','MTC2','IT101','NIT1','NIT3'];
+
+const ALL_ROOMS = [...LECTURE_ROOMS, ...LABORATORY_ROOMS];
+
+// Class size data - editable via UI in future phases; loaded from defaults on first startup
+const DEFAULT_CLASS_SIZES = {
+  IT1B1: { year: '1st Year', block: 'B1', size: 54 },
+  IT1B2: { year: '1st Year', block: 'B2', size: 54 },
+  IT2B1: { year: '2nd Year', block: 'B1', size: 45 },
+  IT2B2: { year: '2nd Year', block: 'B2', size: 39 },
+  IT3B1: { year: '3rd Year', block: 'B1', size: 34 },
+  IT3B2: { year: '3rd Year', block: 'B2', size: 32 },
+  IT3B3: { year: '3rd Year', block: 'B3', size: 32 },
+  IT4B1: { year: '4th Year', block: 'B1', size: 33 },
+  IT4B2: { year: '4th Year', block: 'B2', size: 32 },
+  IT4B3: { year: '4th Year', block: 'B3', size: 32 },
+};
+
 const INITIAL_FACULTY = [
-  { name: 'Prof A',  specialization: ['Cybersecurity / Information Assurance'],          max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
-  { name: 'Prof B',  specialization: ['Systems Architecture / Enterprise Systems'],       max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
-  { name: 'Prof C',    specialization: ['Software Engineering / Programming Languages'],    max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
-  { name: 'Prof D',     specialization: ['Data Science / Applied Mathematics'],              max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
-  { name: 'Prof E',   specialization: ['Computer Networks / Network Engineering'],         max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
-  { name: 'Prof F',      specialization: ['Emerging Technologies / Application Development'], max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
-  { name: 'Prof G', specialization: ['Software Engineering / Systems Integration'],      max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
-  { name: 'Prof H',   specialization: ['Information Systems / Database Management'],       max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
-  { name: 'Prof I',  specialization: ['Human-Computer Interaction (HCI)'],                max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
-  { name: 'Prof J',     specialization: ['Database Systems / Information Systems'],          max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] }
+  { name: 'Prof A',  specialization: ['Networks & Security'],    max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof B',  specialization: ['Systems'],                max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof C',  specialization: ['Programming'],            max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof D',  specialization: ['Mathematics'],            max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof E',  specialization: ['Networks & Security'],    max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof F',  specialization: ['Web & App Dev'],          max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof G',  specialization: ['Systems'],                max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof H',  specialization: ['Data Management'],        max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof I',  specialization: ['Applied Computing'],      max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] },
+  { name: 'Prof J',  specialization: ['Data Management'],        max_units: 24, absolute_max_units: 30, availability: ['Mon','Tue','Wed','Thu'] }
 ];
 
 const DEFAULT_SUBJECTS = [
-  { name: 'Introduction to Computing',                           type: 'Software',    year: '1st Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Computer Programming 1',                             type: 'Software',    year: '1st Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Discrete Mathematics',                               type: 'Software',    year: '1st Year', semester: '2nd Semester', lec_units: 3, lab_units: 0 },
-  { name: 'Introduction to Human Computer Interaction',         type: 'Software',    year: '1st Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Computer Programming 2',                             type: 'Software',    year: '1st Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Graphics and Visual Computing',                      type: 'Software',    year: '2nd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Data Structures and Algorithms',                     type: 'Software',    year: '2nd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
-  { name: 'IT Elective 1',                                      type: 'Elective',    year: '2nd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
-  { name: 'IT Elective 2',                                      type: 'Elective',    year: '2nd Year', semester: '1st Semester', lec_units: 2, lab_units: 0 },
-  { name: 'Mathematics for Data Science',                       type: 'Software',    year: '2nd Year', semester: '2nd Semester', lec_units: 3, lab_units: 0 },
-  { name: 'Information Management 1',                           type: 'Database',    year: '2nd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Quantitative Methods w/ Modelling and Simulation',   type: 'Software',    year: '2nd Year', semester: '2nd Semester', lec_units: 3, lab_units: 0 },
-  { name: 'Network Technologies 1',                             type: 'Networking',  year: '2nd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Integrative Programming Technologies 1',             type: 'Software',    year: '2nd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Systems Integration and Architecture 1',             type: 'Software',    year: '2nd Year', semester: '3rd Semester', lec_units: 3, lab_units: 0 },
-  { name: 'Advanced Database Systems',                          type: 'Database',    year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Network Technologies 2',                             type: 'Networking',  year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Information Assurance and Security 1',               type: 'Software',    year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 0 },
-  { name: 'Web Systems and Technologies 1',                     type: 'Software',    year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Multimedia Systems',                                 type: 'Software',    year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
-  { name: 'IT Elective 3',                                      type: 'Elective',    year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 0 },
-  { name: 'Application Development and Emerging Technologies 1',type: 'Software',    year: '3rd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Geographic Information System',                      type: 'Software',    year: '3rd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Embedded System',                                    type: 'Software',    year: '3rd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
-  { name: 'Information Assurance and Security 2',               type: 'Software',    year: '3rd Year', semester: '2nd Semester', lec_units: 2, lab_units: 0 }
+  { name: 'Introduction to Computing',                           type: 'Core Theory',       year: '1st Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Computer Programming 1',                             type: 'Programming',        year: '1st Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Discrete Mathematics',                               type: 'Mathematics',        year: '1st Year', semester: '2nd Semester', lec_units: 3, lab_units: 0 },
+  { name: 'Introduction to Human Computer Interaction',         type: 'Applied Computing',  year: '1st Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Computer Programming 2',                             type: 'Programming',        year: '1st Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Graphics and Visual Computing',                      type: 'Applied Computing',  year: '2nd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Data Structures and Algorithms',                     type: 'Programming',        year: '2nd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
+  { name: 'IT Elective 1',                                      type: 'Elective',           year: '2nd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
+  { name: 'IT Elective 2',                                      type: 'Elective',           year: '2nd Year', semester: '1st Semester', lec_units: 2, lab_units: 0 },
+  { name: 'Mathematics for Data Science',                       type: 'Mathematics',        year: '2nd Year', semester: '2nd Semester', lec_units: 3, lab_units: 0 },
+  { name: 'Information Management 1',                           type: 'Data Management',    year: '2nd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Quantitative Methods w/ Modelling and Simulation',   type: 'Mathematics',        year: '2nd Year', semester: '2nd Semester', lec_units: 3, lab_units: 0 },
+  { name: 'Network Technologies 1',                             type: 'Networks & Security',year: '2nd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Integrative Programming Technologies 1',             type: 'Programming',        year: '2nd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Systems Integration and Architecture 1',             type: 'Systems',            year: '2nd Year', semester: '3rd Semester', lec_units: 3, lab_units: 0 },
+  { name: 'Advanced Database Systems',                          type: 'Data Management',    year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Network Technologies 2',                             type: 'Networks & Security',year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Information Assurance and Security 1',               type: 'Networks & Security',year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 0 },
+  { name: 'Web Systems and Technologies 1',                     type: 'Web & App Dev',      year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Multimedia Systems',                                 type: 'Applied Computing',  year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
+  { name: 'IT Elective 3',                                      type: 'Elective',           year: '3rd Year', semester: '1st Semester', lec_units: 2, lab_units: 0 },
+  { name: 'Application Development and Emerging Technologies 1',type: 'Web & App Dev',      year: '3rd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Geographic Information System',                      type: 'Applied Computing',  year: '3rd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Embedded System',                                    type: 'Applied Computing',  year: '3rd Year', semester: '2nd Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Information Assurance and Security 2',               type: 'Networks & Security',year: '3rd Year', semester: '2nd Semester', lec_units: 2, lab_units: 0 },
+  { name: 'Capstone Project and Research 1',                    type: 'Research & Capstone',year: '3rd Year', semester: '2nd Semester', lec_units: 2, lab_units: 0 },
+  { name: 'Systems Administration and Maintenance',             type: 'Systems',            year: '4th Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Capstone Project and Research 2',                    type: 'Research & Capstone',year: '4th Year', semester: '1st Semester', lec_units: 2, lab_units: 0 },
+  { name: 'IT Elective 4',                                      type: 'Elective',           year: '4th Year', semester: '1st Semester', lec_units: 2, lab_units: 1 },
+  { name: 'Educational Tour in IT Industry',                    type: 'Industry Practice',  year: '4th Year', semester: '1st Semester', lec_units: 3, lab_units: 0 },
+  { name: 'Thesis Writing and Colloquium',                      type: 'Research & Capstone',year: '4th Year', semester: '2nd Semester', lec_units: 2, lab_units: 0 },
+  { name: 'Practicum (486 Hours)',                              type: 'Industry Practice',  year: '4th Year', semester: '2nd Semester', lec_units: 6, lab_units: 0 },
 ];
 
 // Table sort state
@@ -355,17 +391,35 @@ function renderTimetable(data) {
   const container = document.getElementById('facultyTimetableContainer');
   if (!container) return;
 
-  const TIME_SLOTS = ['7-9', '9-11', '11-13', '13-15', '15-17', '17-19'];
   const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const SLOT_DEFS = [
+    { label: '7–9',   startH: 7,  endH: 9  },
+    { label: '9–11',  startH: 9,  endH: 11 },
+    { label: '11–13', startH: 11, endH: 13 },
+    { label: '13–15', startH: 13, endH: 15 },
+    { label: '15–17', startH: 15, endH: 17 },
+    { label: '17–19', startH: 17, endH: 19 },
+  ];
 
+  // Build lookup keyed by "Day-startH-endH"
   const lookup = {};
   data.forEach(item => {
-    const parts = item.slot.split(':');
-    const day  = parts[0].trim();
-    const time = (parts[1] || '').trim();
-    const key  = `${day}-${time}`;
+    const slot = item.slot || '';
+    const dayMatch  = slot.match(/^(\w+):/);
+    const timeMatch = slot.match(/(\d+):00-(\d+):00/);
+    if (!dayMatch || !timeMatch) return;
+    const day    = dayMatch[1].trim();
+    const startH = parseInt(timeMatch[1], 10);
+    const endH   = parseInt(timeMatch[2], 10);
+    const key    = `${day}-${startH}-${endH}`;
     if (!lookup[key]) lookup[key] = [];
-    lookup[key].push({ faculty: item.faculty, subject: item.subject });
+    lookup[key].push({
+      faculty:      item.faculty,
+      subject:      item.subject,
+      class_type:   item.class_type || 'LECTURE',
+      room:         item.room || '',
+      slot_display: item.slot_display || item.slot
+    });
   });
 
   let html = '<div class="timetable-scroll"><table class="timetable-grid"><thead><tr>';
@@ -373,19 +427,22 @@ function renderTimetable(data) {
   DAYS.forEach(d => { html += `<th class="tt-day-col tt-hd-${d}">${d}</th>`; });
   html += '</tr></thead><tbody>';
 
-  TIME_SLOTS.forEach(slot => {
-    html += `<tr><td class="tt-time-label">${slot}</td>`;
+  SLOT_DEFS.forEach(({ label, startH, endH }) => {
+    html += `<tr><td class="tt-time-label">${label}</td>`;
     DAYS.forEach(day => {
-      const key = `${day}-${slot}`;
+      const key     = `${day}-${startH}-${endH}`;
       const entries = lookup[key] || [];
       if (!entries.length) {
         html += `<td class="tt-cell tt-empty"></td>`;
       } else {
         html += `<td class="tt-cell tt-filled tt-bg-${day}">`;
         entries.forEach(e => {
+          const ctClass = (e.class_type || 'LECTURE').toLowerCase();
           html += `<div class="tt-entry">
+            <span class="tt-class-tag ${ctClass}">${escapeHTML(e.class_type || 'LECTURE')}</span>
             <div class="tt-faculty-tag">${escapeHTML(e.faculty)}</div>
             <div class="tt-subject-tag">${escapeHTML(e.subject)}</div>
+            ${e.room ? `<span class="tt-room-tag">&#128205; ${escapeHTML(e.room)}</span>` : ''}
           </div>`;
         });
         html += `</td>`;
@@ -422,12 +479,15 @@ function updateReportsPanel(data) {
 
     assignments.forEach((item, idx) => {
       const day = item.slot.split(':')[0].trim();
+      const displaySlot = item.slot_display || item.slot;
       const tr = document.createElement('tr');
 
       const subjectSlotHTML = `
         <td>
-          <span>${escapeHTML(item.subject)}</span>
-          <span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(item.slot)}</span>
+          <span>${escapeHTML(item.subject)}</span><br>
+          <span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(displaySlot)}</span>
+          ${item.room ? `<span class="room-badge" style="margin-left:4px;">&#128205; ${escapeHTML(item.room)}</span>` : ''}
+          <span class="class-type-tag ${(item.class_type||'LECTURE').toLowerCase()}" style="margin-left:4px;">${escapeHTML(item.class_type||'LECTURE')}</span>
         </td>`;
 
       if (idx === 0) {
@@ -452,10 +512,17 @@ function updateReportsPanel(data) {
 
 
 const TYPE_SPEC_KEYWORDS = {
-  Software:  ['software','programming','application','emerging','integration','web','multimedia','embedded','hci','human-computer','graphics','visual','algorithms','data structures','gis','geographic'],
-  Database:  ['database','information systems','information management'],
-  Networking:['network','cybersecurity','information assurance'],
-  Elective:  [] // electives match any
+  'Core Theory':        ['core','theory','introduction','computing','fundamentals'],
+  'Programming':        ['programming','software','algorithms','data structures','coding','development'],
+  'Systems':            ['systems','architecture','integration','administration','maintenance'],
+  'Data Management':    ['database','information management','data management','information systems'],
+  'Networks & Security':['network','cybersecurity','information assurance','security'],
+  'Applied Computing':  ['multimedia','gis','geographic','embedded','graphics','visual','hci','human-computer','applied'],
+  'Mathematics':        ['mathematics','math','quantitative','modelling','simulation','data science'],
+  'Web & App Dev':      ['web','application','emerging','app','technologies'],
+  'Research & Capstone':['capstone','research','thesis','colloquium'],
+  'Industry Practice':  ['practicum','tour','industry','practice'],
+  'Elective':           []
 };
 
 function specMatchesType(specList, subjectType) {
@@ -577,7 +644,7 @@ function renderTable(data) {
   tbody.innerHTML = '';
 
   if (!data || !data.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="empty-state-msg">No optimal assignments found. Adjust parameters and click "Run Engine".</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state-msg">No optimal assignments found. Adjust parameters and click "Run Engine".</td></tr>';
     return;
   }
 
@@ -596,13 +663,16 @@ function renderTable(data) {
 
   sorted.forEach(item => {
     const day = item.slot.split(':')[0].trim();
+    const displaySlot = item.slot_display || item.slot;
     const tr = document.createElement('tr');
     tr.dataset.day = day;
     tr.innerHTML = `
       <td>${escapeHTML(item.faculty)}</td>
       <td>${escapeHTML(item.subject)}</td>
       <td>${escapeHTML(item.type)}</td>
-      <td>${escapeHTML(item.slot)}</td>
+      <td><span class="class-type-tag ${(item.class_type||'LECTURE').toLowerCase()}">${escapeHTML(item.class_type || 'LECTURE')}</span></td>
+      <td>${escapeHTML(displaySlot)}</td>
+      <td>${item.room ? `<span class="room-badge">&#128205; ${escapeHTML(item.room)}</span>` : '<span class="text-muted">—</span>'}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -662,15 +732,33 @@ async function triggerGARunAPI() {
   const mutation    = document.getElementById('mutationRate').value;
   const crossover   = document.getElementById('crossoverRate').value;
 
-  // Transform UI subjects list to match backend specification format properties payload architecture requirements
   const rawSubjects = getSubjectsFromTable();
+
+  // Filter by active academic semester mode
+  let filteredSubjects = rawSubjects;
+  try {
+    const mode = JSON.parse(localStorage.getItem('academicMode') || 'null');
+    if (mode && mode.semester) {
+      filteredSubjects = rawSubjects.filter(s => s.semester === mode.semester);
+    }
+  } catch(e) {}
+
   const expandedSubjects = [];
-  rawSubjects.forEach(s => {
-    const count = s.hours / 2; // Assuming 2 hours per block segment schedule layout structure paradigm
-    for(let i=0; i<count; i++) {
-      expandedSubjects.push({ name: s.name, type: s.type, hours: 2 });
+  filteredSubjects.forEach(s => {
+    if (s.lec_units > 0) {
+      const lecCount = Math.ceil(s.lec_units / 2);
+      for (let i = 0; i < lecCount; i++) {
+        expandedSubjects.push({ name: s.name, type: s.type, class_type: 'LECTURE', hours: 2 });
+      }
+    }
+    if (s.lab_units > 0) {
+      expandedSubjects.push({ name: s.name, type: s.type, class_type: 'LAB', hours: 3 });
     }
   });
+
+  if (!expandedSubjects.length) {
+    throw new Error('No subjects found for the selected semester.');
+  }
 
   const payload = {
     faculty:    getFacultyFromTable(),
@@ -745,6 +833,7 @@ function initRunGA() {
             renderTimetable(lastGAResult);
             updateReportsPanel(lastGAResult);
             renderSubjectsGrouped();
+            try { localStorage.setItem('lastGAResult', JSON.stringify(lastGAResult)); } catch(e) {}
             showToast('Optimization Run Complete!', 'success');
           }
         } catch (err) {
@@ -984,7 +1073,7 @@ function addSubjectRow(data = {}) {
   const year     = data.year || '1st Year';
   const semester = data.semester || '1st Semester';
   const name     = data.name || '';
-  const type     = data.type || 'Software';
+  const type     = data.type || 'Core Theory';
   const lec      = data.lec_units !== undefined ? data.lec_units : 2;
   const lab      = data.lab_units !== undefined ? data.lab_units : 1;
 
@@ -1007,9 +1096,16 @@ function addSubjectRow(data = {}) {
     <td><input type="text" class="subject-name" placeholder="Subject Title" value="${escapeAttr(name)}"></td>
     <td>
       <select class="subject-type">
-        <option ${type==='Software'?'selected':''}>Software</option>
-        <option ${type==='Database'?'selected':''}>Database</option>
-        <option ${type==='Networking'?'selected':''}>Networking</option>
+        <option ${type==='Core Theory'?'selected':''}>Core Theory</option>
+        <option ${type==='Programming'?'selected':''}>Programming</option>
+        <option ${type==='Systems'?'selected':''}>Systems</option>
+        <option ${type==='Data Management'?'selected':''}>Data Management</option>
+        <option ${type==='Networks & Security'?'selected':''}>Networks & Security</option>
+        <option ${type==='Applied Computing'?'selected':''}>Applied Computing</option>
+        <option ${type==='Mathematics'?'selected':''}>Mathematics</option>
+        <option ${type==='Web & App Dev'?'selected':''}>Web & App Dev</option>
+        <option ${type==='Research & Capstone'?'selected':''}>Research & Capstone</option>
+        <option ${type==='Industry Practice'?'selected':''}>Industry Practice</option>
         <option ${type==='Elective'?'selected':''}>Elective</option>
       </select>
     </td>
@@ -1108,7 +1204,7 @@ function renderSubjectsGrouped() {
               ${grouped[key].map(s => `
                 <tr>
                   <td><strong>${escapeHTML(s.name)}</strong></td>
-                  <td><span class="type-tag ${s.type.toLowerCase()}">${escapeHTML(s.type)}</span></td>
+                  <td><span class="type-tag ${s.type.toLowerCase().replace(/[\s&\/]+/g,'-')}">${escapeHTML(s.type)}</span></td>
                   <td class="txt-center">${s.lec_units}</td>
                   <td class="txt-center">${s.lab_units}</td>
                   <td class="txt-center font-mono">${s.hours}h</td>
@@ -1144,8 +1240,8 @@ function renderDashboardAssignments(data) {
   const byFaculty = {};
   data.forEach(item => {
     if (!item.faculty) return;
-    if (!byFaculty[item.faculty]) byFaculty[item.faculty] = new Set();
-    byFaculty[item.faculty].add(item.subject);
+    if (!byFaculty[item.faculty]) byFaculty[item.faculty] = [];
+    byFaculty[item.faculty].push(item);
   });
 
   if (!Object.keys(byFaculty).length) {
@@ -1155,8 +1251,8 @@ function renderDashboardAssignments(data) {
 
   let html = '<div class="fac-assign-grid">';
   Object.keys(byFaculty).sort().forEach(faculty => {
-    const subjects = Array.from(byFaculty[faculty]);
-    const units = (data.filter(d => d.faculty === faculty).length) * 2;
+    const items = byFaculty[faculty];
+    const units = items.length * 2;
     const colorClass = units > MAX_UNITS ? 'units-over' : units === MAX_UNITS ? 'units-max' : 'units-ok';
 
     html += `
@@ -1168,12 +1264,22 @@ function renderDashboardAssignments(data) {
         </div>
         <div class="fac-assign-body">
           <ul class="fac-assign-list">
-            ${subjects.map(s => `
-              <li>
-                <span class="dot"></span>
-                <span class="name" title="${escapeAttr(s)}">${escapeHTML(s)}</span>
-              </li>
-            `).join('')}
+            ${items.map(item => {
+              const ctClass = (item.class_type || 'LECTURE').toLowerCase();
+              const displaySlot = item.slot_display || item.slot || '';
+              return `
+                <li class="fac-assign-item-full">
+                  <span class="dot"></span>
+                  <span class="fac-assign-item-inner">
+                    <span class="name" title="${escapeAttr(item.subject)}">${escapeHTML(item.subject)}</span>
+                    <span class="fac-assign-meta">
+                      <span class="class-type-tag ${ctClass}" style="font-size:0.6rem;padding:1px 5px;">${escapeHTML(item.class_type || 'LECTURE')}</span>
+                      ${displaySlot ? `<span class="fac-assign-slot">${escapeHTML(displaySlot)}</span>` : ''}
+                      ${item.room ? `<span class="tt-room-tag" style="font-size:0.65rem;">&#128205; ${escapeHTML(item.room)}</span>` : ''}
+                    </span>
+                  </span>
+                </li>`;
+            }).join('')}
           </ul>
         </div>
       </div>
@@ -1196,13 +1302,17 @@ function initExports() {
         alert('Run the optimization framework engine first before exporting data records.');
         return;
       }
-      const headers = ['Faculty Member', 'Subject Title', 'Classification Type', 'Schedule Slot Assigned'];
-      const rows = Array.from(document.querySelectorAll('#gaResultsTable tbody tr'));
-      
-      const csv = [headers.join(',')].concat(
-        rows.map(r => Array.from(r.children).map(td => `"${td.innerText.replace(/"/g, '""')}"`).join(','))
-      ).join('\n');
+      const headers = ['Faculty Member', 'Subject Title', 'Classification Type', 'Class Type', 'Schedule Slot', 'Room'];
+      const rows = lastGAResult.map(item => [
+        `"${(item.faculty||'').replace(/"/g,'""')}"`,
+        `"${(item.subject||'').replace(/"/g,'""')}"`,
+        `"${(item.type||'').replace(/"/g,'""')}"`,
+        `"${(item.class_type||'LECTURE').replace(/"/g,'""')}"`,
+        `"${(item.slot_display||item.slot||'').replace(/"/g,'""')}"`,
+        `"${(item.room||'').replace(/"/g,'""')}"`
+      ].join(','));
 
+      const csv = [headers.join(',')].concat(rows).join('\n');
       downloadFile(csv, 'atlas_psu_reports.csv', 'text/csv');
     });
   }
@@ -1264,10 +1374,12 @@ function generatePrintReport() {
     return ps(a.slot) - ps(b.slot);
   }).map(item => `
     <tr>
-      <td class="font-mono"><strong>${escapeHTML(item.slot)}</strong></td>
+      <td class="font-mono"><strong>${escapeHTML(item.slot_display || item.slot)}</strong></td>
       <td>${escapeHTML(item.subject)}</td>
       <td><span class="type-tag ${item.type.toLowerCase()}">${escapeHTML(item.type)}</span></td>
       <td><strong>${escapeHTML(item.faculty)}</strong></td>
+      <td><span class="room-cell">${escapeHTML(item.room || '—')}</span></td>
+      <td><span class="print-class-tag ${(item.class_type||'LECTURE').toLowerCase()}">${escapeHTML(item.class_type || 'LECTURE')}</span></td>
     </tr>
   `).join('');
 
@@ -1466,6 +1578,24 @@ function generatePrintReport() {
     .print-status-tag.maxload { background: #fef3c7; color: #b45309; }
     .print-status-tag.overload { background: #fee2e2; color: #b91c1c; }
 
+    .print-class-tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 7.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .print-class-tag.lecture { background: #e0f2fe; color: #0369a1; }
+    .print-class-tag.lab     { background: #f3e8ff; color: #6b21a8; }
+
+    .room-cell {
+      font-family: 'JetBrains Mono', Consolas, monospace;
+      font-size: 8.5pt;
+      color: #7c3aed;
+      font-weight: 600;
+    }
+
     .type-tag {
       display: inline-block;
       padding: 2px 6px;
@@ -1605,6 +1735,8 @@ function generatePrintReport() {
           <th>Subject Description Name Title</th>
           <th style="width: 120px;">Domain Type</th>
           <th>Assigned Professor</th>
+          <th style="width: 100px;">Room</th>
+          <th style="width: 80px;">Class</th>
         </tr>
       </thead>
       <tbody>
@@ -1679,7 +1811,13 @@ window.addEventListener('DOMContentLoaded', () => {
   if (localStorage.getItem('atlasDataVersion') !== DATA_VERSION) {
     localStorage.removeItem('facultyData');
     localStorage.removeItem('subjectsData');
+    localStorage.removeItem('classSizesData');
     localStorage.setItem('atlasDataVersion', DATA_VERSION);
+  }
+
+  // Load class sizes (editable, not fixed)
+  if (!loadClassSizesFromStorage()) {
+    saveClassSizes(DEFAULT_CLASS_SIZES);
   }
 
   initCharts();
@@ -1688,6 +1826,9 @@ window.addEventListener('DOMContentLoaded', () => {
   initFacultyManagement();
   initSubjectsManagement();
   initExports();
+  initRoomManagement();
+  initClassSizesManagement();
+  initAcademicMode();
 
   // Load faculty
   const savedFaculty = loadFacultyFromStorage();
@@ -1707,7 +1848,430 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   saveSubjects();
   renderSubjectsGrouped();
+
+  // Init soft constraints (needs faculty loaded first)
+  initSoftConstraints();
+
+  // Restore last GA result and re-render all views
+  try {
+    const saved = localStorage.getItem('lastGAResult');
+    if (saved) {
+      lastGAResult = JSON.parse(saved);
+      if (lastGAResult && lastGAResult.length) {
+        renderTable(lastGAResult);
+        updateCharts(lastGAResult);
+        computeFairnessReport(lastGAResult);
+        renderDashboardAssignments(lastGAResult);
+        renderTimetable(lastGAResult);
+        updateReportsPanel(lastGAResult);
+      }
+    }
+  } catch(e) { lastGAResult = []; }
 });
+
+function initAcademicMode() {
+  const yearInput = document.getElementById('academicYear');
+  const semSel    = document.getElementById('academicSemester');
+  const saveBtn   = document.getElementById('saveAcademicMode');
+  const label     = document.getElementById('academicModeLabel');
+  const savedMsg  = document.getElementById('academicModeSaved');
+  if (!yearInput || !semSel || !saveBtn) return;
+
+  const load = () => {
+    try { return JSON.parse(localStorage.getItem('academicMode') || 'null'); } catch(e) { return null; }
+  };
+
+  const render = (mode) => {
+    if (!mode) { if(label) label.textContent = 'No academic mode set.'; return; }
+    const txt = `${mode.year} · ${mode.semester}`;
+    if (label) label.textContent = 'Active: ' + txt;
+    // Show in navbar brand
+    const brand = document.querySelector('.brand');
+    if (brand) brand.title = 'ATLAS PSU · ' + txt;
+  };
+
+  const saved = load();
+  if (saved) {
+    yearInput.value = saved.year || '';
+    semSel.value    = saved.semester || '1st Semester';
+    render(saved);
+  }
+
+  saveBtn.addEventListener('click', () => {
+    const mode = { year: yearInput.value.trim(), semester: semSel.value };
+    localStorage.setItem('academicMode', JSON.stringify(mode));
+    render(mode);
+    if (savedMsg) { savedMsg.style.display = 'inline'; setTimeout(() => { savedMsg.style.display = 'none'; }, 2000); }
+    showToast(`Academic mode set: ${mode.year} · ${mode.semester}`, 'success');
+  });
+}
+
+/* ============================================================
+   CLASS SIZE STORAGE
+   ============================================================ */
+function loadClassSizesFromStorage() {
+  try {
+    const data = localStorage.getItem('classSizesData');
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveClassSizes(sizes) {
+  try {
+    localStorage.setItem('classSizesData', JSON.stringify(sizes));
+  } catch (e) {
+    console.warn('LocalStorage save failed:', e);
+  }
+}
+
+function getClassSizes() {
+  return loadClassSizesFromStorage() || DEFAULT_CLASS_SIZES;
+}
+
+/* ============================================================
+   ROOM MANAGEMENT UI
+   ============================================================ */
+const DEFAULT_LECTURE_ROOMS = [...LECTURE_ROOMS];
+const DEFAULT_LABORATORY_ROOMS = [...LABORATORY_ROOMS];
+
+let runtimeLectureRooms = [...LECTURE_ROOMS];
+let runtimeLabRooms = [...LABORATORY_ROOMS];
+
+function loadRoomsFromStorage() {
+  try {
+    const data = localStorage.getItem('roomsData');
+    return data ? JSON.parse(data) : null;
+  } catch (e) { return null; }
+}
+
+function saveRoomsToStorage() {
+  try {
+    localStorage.setItem('roomsData', JSON.stringify({
+      lecture: runtimeLectureRooms,
+      lab: runtimeLabRooms
+    }));
+  } catch (e) { console.warn('Rooms save failed:', e); }
+}
+
+function renderRoomList(containerId, rooms) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  rooms.forEach((room, idx) => {
+    const item = document.createElement('div');
+    item.className = 'room-item';
+    item.innerHTML = `
+      <input type="text" value="${escapeAttr(room)}" placeholder="Room name" style="flex:1;">
+      <button class="room-item-del" data-idx="${idx}" title="Delete">&times;</button>
+    `;
+    item.querySelector('input').addEventListener('input', debounce(() => {
+      const list = containerId === 'lectureRoomsList' ? runtimeLectureRooms : runtimeLabRooms;
+      list[idx] = item.querySelector('input').value.trim();
+    }, 300));
+    item.querySelector('.room-item-del').addEventListener('click', () => {
+      if (containerId === 'lectureRoomsList') {
+        runtimeLectureRooms.splice(idx, 1);
+        renderRoomList('lectureRoomsList', runtimeLectureRooms);
+      } else {
+        runtimeLabRooms.splice(idx, 1);
+        renderRoomList('labRoomsList', runtimeLabRooms);
+      }
+    });
+    container.appendChild(item);
+  });
+}
+
+function initRoomManagement() {
+  const stored = loadRoomsFromStorage();
+  if (stored) {
+    runtimeLectureRooms = stored.lecture || [...LECTURE_ROOMS];
+    runtimeLabRooms = stored.lab || [...LABORATORY_ROOMS];
+  }
+
+  renderRoomList('lectureRoomsList', runtimeLectureRooms);
+  renderRoomList('labRoomsList', runtimeLabRooms);
+
+  document.getElementById('addLectureRoom')?.addEventListener('click', () => {
+    runtimeLectureRooms.push('');
+    renderRoomList('lectureRoomsList', runtimeLectureRooms);
+  });
+
+  document.getElementById('addLabRoom')?.addEventListener('click', () => {
+    runtimeLabRooms.push('');
+    renderRoomList('labRoomsList', runtimeLabRooms);
+  });
+
+  document.getElementById('saveRooms')?.addEventListener('click', async () => {
+    // Sync from DOM inputs
+    document.querySelectorAll('#lectureRoomsList .room-item input').forEach((inp, i) => {
+      runtimeLectureRooms[i] = inp.value.trim();
+    });
+    document.querySelectorAll('#labRoomsList .room-item input').forEach((inp, i) => {
+      runtimeLabRooms[i] = inp.value.trim();
+    });
+    runtimeLectureRooms = runtimeLectureRooms.filter(r => r);
+    runtimeLabRooms = runtimeLabRooms.filter(r => r);
+    saveRoomsToStorage();
+    // Also populate the soft constraint room dropdown
+    populateSCRoomDropdown();
+    showToast('Rooms saved successfully.', 'success');
+    try {
+      await fetch(`${API_BASE}/rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lecture_rooms: runtimeLectureRooms, laboratory_rooms: runtimeLabRooms })
+      });
+    } catch (e) { /* backend optional sync */ }
+  });
+
+  document.getElementById('resetRooms')?.addEventListener('click', () => {
+    runtimeLectureRooms = [...DEFAULT_LECTURE_ROOMS];
+    runtimeLabRooms = [...DEFAULT_LABORATORY_ROOMS];
+    renderRoomList('lectureRoomsList', runtimeLectureRooms);
+    renderRoomList('labRoomsList', runtimeLabRooms);
+    saveRoomsToStorage();
+    showToast('Rooms reset to defaults.', 'info');
+  });
+}
+
+/* ============================================================
+   CLASS SIZES MANAGEMENT UI
+   ============================================================ */
+function renderClassSizesTable() {
+  const tbody = document.querySelector('#classSizesTable tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const sizes = getClassSizes();
+  Object.entries(sizes).forEach(([key, val]) => {
+    const tr = document.createElement('tr');
+    tr.dataset.key = key;
+    tr.innerHTML = `
+      <td><span class="cs-key-badge">${escapeHTML(key)}</span><input type="hidden" class="cs-key" value="${escapeAttr(key)}"></td>
+      <td>
+        <select class="cs-year">
+          <option ${val.year==='1st Year'?'selected':''}>1st Year</option>
+          <option ${val.year==='2nd Year'?'selected':''}>2nd Year</option>
+          <option ${val.year==='3rd Year'?'selected':''}>3rd Year</option>
+          <option ${val.year==='4th Year'?'selected':''}>4th Year</option>
+        </select>
+      </td>
+      <td><input type="text" class="cs-block" value="${escapeAttr(val.block||'')}" placeholder="e.g. B1" style="max-width:80px;"></td>
+      <td><input type="number" class="cs-size" value="${val.size||0}" min="1" max="200" style="max-width:100px;"></td>
+      <td><button type="button" class="btn-delete row-action-btn cs-del" title="Delete">Delete</button></td>
+    `;
+    tr.querySelector('.cs-del').addEventListener('click', () => {
+      tr.remove();
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function getClassSizesFromTable() {
+  const result = {};
+  document.querySelectorAll('#classSizesTable tbody tr').forEach(tr => {
+    const key = tr.querySelector('.cs-key')?.value?.trim();
+    if (!key) return;
+    result[key] = {
+      year:  tr.querySelector('.cs-year')?.value || '1st Year',
+      block: tr.querySelector('.cs-block')?.value?.trim() || '',
+      size:  parseInt(tr.querySelector('.cs-size')?.value || 0, 10)
+    };
+  });
+  return result;
+}
+
+function initClassSizesManagement() {
+  renderClassSizesTable();
+
+  document.getElementById('saveClassSizes')?.addEventListener('click', async () => {
+    const sizes = getClassSizesFromTable();
+    saveClassSizes(sizes);
+    showToast('Class sizes saved.', 'success');
+    try {
+      await fetch(`${API_BASE}/class-sizes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sizes)
+      });
+    } catch (e) { /* optional backend sync */ }
+  });
+
+  document.getElementById('addClassSizeRow')?.addEventListener('click', () => {
+    const tbody = document.querySelector('#classSizesTable tbody');
+    if (!tbody) return;
+    const newKey = `IT${Math.floor(Math.random()*90)+10}B${Math.floor(Math.random()*3)+1}`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" class="cs-key" value="${newKey}" placeholder="e.g. IT1B1" style="max-width:90px;"></td>
+      <td>
+        <select class="cs-year">
+          <option>1st Year</option>
+          <option>2nd Year</option>
+          <option>3rd Year</option>
+          <option>4th Year</option>
+        </select>
+      </td>
+      <td><input type="text" class="cs-block" value="B1" placeholder="e.g. B1" style="max-width:80px;"></td>
+      <td><input type="number" class="cs-size" value="30" min="1" max="200" style="max-width:100px;"></td>
+      <td><button type="button" class="btn-delete row-action-btn cs-del" title="Delete">Delete</button></td>
+    `;
+    tr.querySelector('.cs-del').addEventListener('click', () => tr.remove());
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('resetClassSizes')?.addEventListener('click', () => {
+    saveClassSizes(DEFAULT_CLASS_SIZES);
+    renderClassSizesTable();
+    showToast('Class sizes reset to defaults.', 'info');
+  });
+}
+
+/* ============================================================
+   SOFT CONSTRAINTS (PROFESSOR PREFERENCES) UI
+   ============================================================ */
+let softConstraintsCache = {};
+
+function loadSoftConstraintsFromStorage() {
+  try {
+    const data = localStorage.getItem('softConstraintsData');
+    return data ? JSON.parse(data) : {};
+  } catch (e) { return {}; }
+}
+
+function saveSoftConstraintsToStorage(data) {
+  try {
+    localStorage.setItem('softConstraintsData', JSON.stringify(data));
+  } catch (e) { console.warn('SC save failed:', e); }
+}
+
+function populateSCFacultyDropdown() {
+  const sel = document.getElementById('scFacultySelect');
+  if (!sel) return;
+  const faculty = getFacultyFromTable();
+  sel.innerHTML = '<option value="">— Select Faculty —</option>' +
+    faculty.map(f => `<option value="${escapeAttr(f.name)}">${escapeHTML(f.name)}</option>`).join('');
+}
+
+function populateSCRoomDropdown() {
+  const sel = document.getElementById('scPreferredRoom');
+  if (!sel) return;
+  const allRooms = [...runtimeLectureRooms, ...runtimeLabRooms];
+  sel.innerHTML = '<option value="">— No Preference —</option>' +
+    allRooms.map(r => `<option value="${escapeAttr(r)}">${escapeHTML(r)}</option>`).join('');
+}
+
+function addUnavailDateEntry(container, value = '') {
+  const div = document.createElement('div');
+  div.className = 'date-entry';
+  div.innerHTML = `
+    <input type="date" value="${escapeAttr(value)}" style="flex:1;">
+    <button class="date-entry-del" title="Remove">&times;</button>
+  `;
+  div.querySelector('.date-entry-del').addEventListener('click', () => div.remove());
+  container.appendChild(div);
+}
+
+function addLeaveDateEntry(container, start = '', end = '') {
+  const div = document.createElement('div');
+  div.className = 'date-entry';
+  div.innerHTML = `
+    <input type="date" value="${escapeAttr(start)}" placeholder="Start" style="flex:1;">
+    <span style="font-size:0.75rem;color:var(--text-muted);">to</span>
+    <input type="date" value="${escapeAttr(end)}" placeholder="End" style="flex:1;">
+    <button class="date-entry-del" title="Remove">&times;</button>
+  `;
+  div.querySelector('.date-entry-del').addEventListener('click', () => div.remove());
+  container.appendChild(div);
+}
+
+function loadSCFormForFaculty(name) {
+  const constraints = softConstraintsCache[name] || {};
+  const form = document.getElementById('softConstraintForm');
+  if (!form) return;
+  form.classList.remove('hidden');
+
+  document.getElementById('scPreferredPeriod').value = constraints.preferred_period || '';
+  document.getElementById('scPreferredRoom').value = constraints.preferred_room || '';
+  document.getElementById('scPreferredBuilding').value = constraints.preferred_building || '';
+  document.getElementById('scPreferredFloor').value = constraints.preferred_floor || '';
+  document.getElementById('scMaternityLeave').checked = !!constraints.maternity_leave;
+
+  document.querySelectorAll('.sc-restrict-day').forEach(chk => {
+    chk.checked = (constraints.restricted_days || []).includes(chk.value);
+  });
+
+  const unavailContainer = document.getElementById('unavailDatesContainer');
+  unavailContainer.innerHTML = '';
+  (constraints.unavailable_dates || []).forEach(d => addUnavailDateEntry(unavailContainer, d));
+
+  const leaveContainer = document.getElementById('leaveDatesContainer');
+  leaveContainer.innerHTML = '';
+  (constraints.leave_dates || []).forEach(l => addLeaveDateEntry(leaveContainer, l.start, l.end));
+}
+
+function getSCFormData() {
+  return {
+    preferred_period:   document.getElementById('scPreferredPeriod').value || null,
+    preferred_room:     document.getElementById('scPreferredRoom').value || null,
+    preferred_building: document.getElementById('scPreferredBuilding').value || null,
+    preferred_floor:    document.getElementById('scPreferredFloor').value || null,
+    maternity_leave:    document.getElementById('scMaternityLeave').checked,
+    restricted_days: Array.from(document.querySelectorAll('.sc-restrict-day:checked')).map(c => c.value),
+    unavailable_dates: Array.from(document.querySelectorAll('#unavailDatesContainer .date-entry input[type="date"]'))
+      .map(i => i.value).filter(Boolean),
+    leave_dates: Array.from(document.querySelectorAll('#leaveDatesContainer .date-entry')).map(div => {
+      const inputs = div.querySelectorAll('input[type="date"]');
+      return { start: inputs[0]?.value || '', end: inputs[1]?.value || '' };
+    }).filter(l => l.start || l.end)
+  };
+}
+
+function initSoftConstraints() {
+  softConstraintsCache = loadSoftConstraintsFromStorage();
+  populateSCFacultyDropdown();
+  populateSCRoomDropdown();
+
+  document.getElementById('scLoadBtn')?.addEventListener('click', () => {
+    const name = document.getElementById('scFacultySelect')?.value;
+    if (!name) { showToast('Select a faculty member first.', 'info'); return; }
+    loadSCFormForFaculty(name);
+  });
+
+  document.getElementById('addUnavailDate')?.addEventListener('click', () => {
+    addUnavailDateEntry(document.getElementById('unavailDatesContainer'));
+  });
+
+  document.getElementById('addLeaveDate')?.addEventListener('click', () => {
+    addLeaveDateEntry(document.getElementById('leaveDatesContainer'));
+  });
+
+  document.getElementById('scSaveBtn')?.addEventListener('click', async () => {
+    const name = document.getElementById('scFacultySelect')?.value;
+    if (!name) { showToast('Select a faculty member first.', 'info'); return; }
+    const constraints = getSCFormData();
+    softConstraintsCache[name] = constraints;
+    saveSoftConstraintsToStorage(softConstraintsCache);
+    showToast(`Preferences saved for ${name}.`, 'success');
+    try {
+      await fetch(`${API_BASE}/soft-constraints`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ faculty: name, constraints })
+      });
+    } catch (e) { /* optional backend sync */ }
+  });
+
+  document.getElementById('scClearBtn')?.addEventListener('click', () => {
+    const name = document.getElementById('scFacultySelect')?.value;
+    if (!name) return;
+    delete softConstraintsCache[name];
+    saveSoftConstraintsToStorage(softConstraintsCache);
+    document.getElementById('softConstraintForm')?.classList.add('hidden');
+    showToast(`Preferences cleared for ${name}.`, 'info');
+  });
+}
 
 /* ============================================================
    GLOBAL EXPORTS & TOAST UTILITY
