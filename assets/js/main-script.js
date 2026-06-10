@@ -34,7 +34,7 @@ const DAY_COLORS = {
 
 const MAX_UNITS = 24;
 
-const DATA_VERSION = 'v4'; // bump to wipe stale localStorage on deploy
+const DATA_VERSION = 'v5'; // bump to wipe stale localStorage on deploy
 
 const SPECIALIZATIONS = [
   'Core Theory',
