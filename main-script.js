@@ -134,6 +134,28 @@ let lastSort = { key: 'slot', ascending: true };
 let lastGAResult = [];
 
 /* ============================================================
+   SECTION LABEL UTILITY
+   Maps year field to section keys e.g. "1st Year" → ["IT1B1","IT1B2"]
+   ============================================================ */
+function getSectionLabelsForYear(year) {
+  const sizes = getClassSizes();
+  const labels = Object.entries(sizes)
+    .filter(([, v]) => v.year === year)
+    .map(([k]) => k)
+    .sort();
+  return labels;
+}
+
+function getSectionBadgeHTML(year) {
+  if (!year) return '';
+  const labels = getSectionLabelsForYear(year);
+  if (!labels.length) return '';
+  return labels.map(l =>
+    `<span class="section-badge">${escapeHTML(l)}</span>`
+  ).join('');
+}
+
+/* ============================================================
    2. CHART INSTANCES
    ============================================================ */
 let dashboardChart = null;
@@ -418,7 +440,9 @@ function renderTimetable(data) {
       subject:      item.subject,
       class_type:   item.class_type || 'LECTURE',
       room:         item.room || '',
-      slot_display: item.slot_display || item.slot
+      slot_display: item.slot_display || item.slot,
+      section:      item.section || '',
+      year:         item.year || ''
     });
   });
 
@@ -438,8 +462,10 @@ function renderTimetable(data) {
         html += `<td class="tt-cell tt-filled tt-bg-${day}">`;
         entries.forEach(e => {
           const ctClass = (e.class_type || 'LECTURE').toLowerCase();
+          const secTag = e.section ? `<span class="tt-section-tag">${escapeHTML(e.section)}</span>` : '';
           html += `<div class="tt-entry">
             <span class="tt-class-tag ${ctClass}">${escapeHTML(e.class_type || 'LECTURE')}</span>
+            ${secTag}
             <div class="tt-faculty-tag">${escapeHTML(e.faculty)}</div>
             <div class="tt-subject-tag">${escapeHTML(e.subject)}</div>
             ${e.room ? `<span class="tt-room-tag"> ${escapeHTML(e.room)}</span>` : ''}
@@ -484,7 +510,8 @@ function updateReportsPanel(data) {
 
       const subjectSlotHTML = `
         <td>
-          <span>${escapeHTML(item.subject)}</span><br>
+          <span>${escapeHTML(item.subject)}</span>
+          ${item.section ? `<span class="section-badge" style="margin-left:4px;">${escapeHTML(item.section)}</span>` : (item.year ? `<span class="subject-year-badge">${escapeHTML(item.year.replace(' Year','Y'))}</span>` : '')}<br>
           <span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(displaySlot)}</span>
           ${item.room ? `<span class="room-badge" style="margin-left:4px;"> ${escapeHTML(item.room)}</span>` : ''}
           <span class="class-type-tag ${(item.class_type||'LECTURE').toLowerCase()}" style="margin-left:4px;">${escapeHTML(item.class_type||'LECTURE')}</span>
@@ -666,13 +693,17 @@ function renderTable(data) {
     const displaySlot = item.slot_display || item.slot;
     const tr = document.createElement('tr');
     tr.dataset.day = day;
+    const sectionHTML = item.section
+      ? `<span class="section-badge">${escapeHTML(item.section)}</span>`
+      : (item.year ? getSectionBadgeHTML(item.year) : '<span class="text-muted">N/A</span>');
     tr.innerHTML = `
       <td>${escapeHTML(item.faculty)}</td>
       <td>${escapeHTML(item.subject)}</td>
+      <td class="section-cell">${sectionHTML}</td>
       <td>${escapeHTML(item.type)}</td>
       <td><span class="class-type-tag ${(item.class_type||'LECTURE').toLowerCase()}">${escapeHTML(item.class_type || 'LECTURE')}</span></td>
       <td>${escapeHTML(displaySlot)}</td>
-      <td>${item.room ? `<span class="room-badge"> ${escapeHTML(item.room)}</span>` : '<span class="text-muted">—</span>'}</td>
+      <td>${item.room ? `<span class="room-badge"> ${escapeHTML(item.room)}</span>` : '<span class="text-muted">N/A</span>'}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -734,7 +765,7 @@ async function triggerGARunAPI() {
 
   const rawSubjects = getSubjectsFromTable();
 
-  // Filter by active academic semester — strict: only matching semester subjects
+  // Filter by active academic semester - strict: only matching semester subjects
   const mode = getActiveSemester();
   let filteredSubjects = rawSubjects;
   if (mode && mode.semester) {
@@ -754,11 +785,11 @@ async function triggerGARunAPI() {
     if (s.lec_units > 0) {
       const lecCount = Math.ceil(s.lec_units / 2);
       for (let i = 0; i < lecCount; i++) {
-        expandedSubjects.push({ name: s.name, type: s.type, class_type: 'LECTURE', hours: 2, semester: s.semester });
+        expandedSubjects.push({ name: s.name, type: s.type, class_type: 'LECTURE', hours: 2, semester: s.semester, year: s.year });
       }
     }
     if (s.lab_units > 0) {
-      expandedSubjects.push({ name: s.name, type: s.type, class_type: 'LAB', hours: 3, semester: s.semester });
+      expandedSubjects.push({ name: s.name, type: s.type, class_type: 'LAB', hours: 3, semester: s.semester, year: s.year });
     }
   });
 
@@ -887,7 +918,7 @@ function addFacultyRow(data = {}) {
     </label>
   `).join('');
 
-  // Checkbox value is the short name (Mon/Tue/…) — this is what getFacultyFromTable
+  // Checkbox value is the short name (Mon/Tue/…) - this is what getFacultyFromTable
   // reads and what app.py expects in the availability array.
   const daysHTML = Object.entries(DAY_MAP).map(([short, long]) => `
     <label>
@@ -984,7 +1015,7 @@ function repositionDropdown(dropdown) {
 }
 
 function selectAllByDay(dayShort) {
-  // Checkboxes now use short names as values (Mon, Tue, …) — query directly by dayShort.
+  // Checkboxes now use short names as values (Mon, Tue, …) - query directly by dayShort.
   const checkboxes = document.querySelectorAll(`#facultyTable tbody .avail-checkboxes input[value="${dayShort}"]`);
   if (!checkboxes.length) return;
 
@@ -1000,7 +1031,7 @@ function updateAllSelectAllBtnStates() {
     const btn = document.querySelector(`.btn-select-day[data-day="${short}"]`);
     if (!btn) return;
 
-    // Checkboxes use short names as values — query by short name.
+    // Checkboxes use short names as values - query by short name.
     const checkboxes = document.querySelectorAll(`#facultyTable tbody .avail-checkboxes input[value="${short}"]`);
     if (!checkboxes.length) {
       btn.classList.remove('active');
@@ -1129,8 +1160,8 @@ function addSubjectRow(data = {}) {
     </td>
     <td><input type="number" class="unit-input lec" value="${lec}" min="0" max="10"></td>
     <td><input type="number" class="unit-input lab" value="${lab}" min="0" max="10"></td>
+    <td class="total-cell txt-center">${lec + lab}</td>
     <td><button type="button" class="btn-delete row-action-btn" title="Delete Row">×</button></td>
-    <td class="total-cell">${lec + lab}</td>
   `;
 
   // Dynamic change tracker loops listeners attachments
@@ -1198,39 +1229,37 @@ function renderSubjectsGrouped() {
   });
 
   if (!Object.keys(grouped).length) {
-    container.innerHTML = '<p class="empty-state-msg">No subjects mapped yet. Populate the table configuration list layout profile.</p>';
+    container.innerHTML = '<p class="empty-state-msg">No subjects configured yet.</p>';
     return;
   }
 
-  let html = '<div class="curriculum-grid">';
+  let html = '<div class="curriculum-summary-wrap">';
   Object.keys(grouped).sort().forEach(key => {
     html += `
-      <div class="curriculum-card">
+      <div class="curriculum-group">
         <div class="curriculum-header">${escapeHTML(key)}</div>
-        <div class="curriculum-body">
-          <table class="curriculum-table">
-            <thead>
+        <table class="curriculum-table">
+          <thead>
+            <tr>
+              <th>Subject Name</th>
+              <th>Type</th>
+              <th class="txt-center">Lec</th>
+              <th class="txt-center">Lab</th>
+              <th class="txt-center">Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${grouped[key].map(s => `
               <tr>
-                <th>Subject Name</th>
-                <th>Type</th>
-                <th class="txt-center">Lec</th>
-                <th class="txt-center">Lab</th>
-                <th class="txt-center">Hours</th>
+                <td><strong>${escapeHTML(s.name)}</strong></td>
+                <td><span class="type-tag ${s.type.toLowerCase().replace(/[\s&\/]+/g,'-')}">${escapeHTML(s.type)}</span></td>
+                <td class="txt-center">${s.lec_units}</td>
+                <td class="txt-center">${s.lab_units}</td>
+                <td class="txt-center font-mono">${s.hours}h</td>
               </tr>
-            </thead>
-            <tbody>
-              ${grouped[key].map(s => `
-                <tr>
-                  <td><strong>${escapeHTML(s.name)}</strong></td>
-                  <td><span class="type-tag ${s.type.toLowerCase().replace(/[\s&\/]+/g,'-')}">${escapeHTML(s.type)}</span></td>
-                  <td class="txt-center">${s.lec_units}</td>
-                  <td class="txt-center">${s.lab_units}</td>
-                  <td class="txt-center font-mono">${s.hours}h</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
+            `).join('')}
+          </tbody>
+        </table>
       </div>
     `;
   });
@@ -1285,6 +1314,9 @@ function renderDashboardAssignments(data) {
             ${items.map(item => {
               const ctClass = (item.class_type || 'LECTURE').toLowerCase();
               const displaySlot = item.slot_display || item.slot || '';
+              const sectionHTML = item.section
+                ? `<span class="section-badge" style="font-size:0.62rem;padding:0.1rem 0.4rem;">${escapeHTML(item.section)}</span>`
+                : (item.year ? getSectionBadgeHTML(item.year) : '');
               return `
                 <li class="fac-assign-item-full">
                   <span class="dot"></span>
@@ -1292,6 +1324,7 @@ function renderDashboardAssignments(data) {
                     <span class="name" title="${escapeAttr(item.subject)}">${escapeHTML(item.subject)}</span>
                     <span class="fac-assign-meta">
                       <span class="class-type-tag ${ctClass}" style="font-size:0.6rem;padding:1px 5px;">${escapeHTML(item.class_type || 'LECTURE')}</span>
+                      ${sectionHTML}
                       ${displaySlot ? `<span class="fac-assign-slot">${escapeHTML(displaySlot)}</span>` : ''}
                       ${item.room ? `<span class="tt-room-tag" style="font-size:0.65rem;"> ${escapeHTML(item.room)}</span>` : ''}
                     </span>
@@ -1363,7 +1396,7 @@ function generatePrintReport() {
   const deptFull = deptMap[dept] || dept;
 
   const mode = getActiveSemester();
-  const semesterLabel = mode ? (mode.year ? `${mode.year} — ${mode.semester}` : mode.semester) : 'All Semesters';
+  const semesterLabel = mode ? (mode.year ? `${mode.year} - ${mode.semester}` : mode.semester) : 'All Semesters';
 
   const reportData = filterResultBySemester(lastGAResult);
 
@@ -1406,7 +1439,7 @@ function generatePrintReport() {
       <td>${escapeHTML(item.subject)}</td>
       <td><span class="type-tag ${item.type.toLowerCase()}">${escapeHTML(item.type)}</span></td>
       <td><strong>${escapeHTML(item.faculty)}</strong></td>
-      <td><span class="room-cell">${escapeHTML(item.room || '—')}</span></td>
+      <td><span class="room-cell">${escapeHTML(item.room || 'N/A')}</span></td>
       <td><span class="print-class-tag ${(item.class_type||'LECTURE').toLowerCase()}">${escapeHTML(item.class_type || 'LECTURE')}</span></td>
     </tr>
   `).join('');
@@ -2265,7 +2298,7 @@ function populateSCFacultyDropdown() {
   const sel = document.getElementById('scFacultySelect');
   if (!sel) return;
   const faculty = getFacultyFromTable();
-  sel.innerHTML = '<option value="">— Select Faculty —</option>' +
+  sel.innerHTML = '<option value="">Select Faculty</option>' +
     faculty.map(f => `<option value="${escapeAttr(f.name)}">${escapeHTML(f.name)}</option>`).join('');
 }
 
@@ -2273,7 +2306,7 @@ function populateSCRoomDropdown() {
   const sel = document.getElementById('scPreferredRoom');
   if (!sel) return;
   const allRooms = [...runtimeLectureRooms, ...runtimeLabRooms];
-  sel.innerHTML = '<option value="">— No Preference —</option>' +
+  sel.innerHTML = '<option value="">No Preference</option>' +
     allRooms.map(r => `<option value="${escapeAttr(r)}">${escapeHTML(r)}</option>`).join('');
 }
 

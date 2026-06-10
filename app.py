@@ -350,11 +350,15 @@ def calculate_fitness(chromosome: list[dict], faculty_list: list[dict], subject_
     matches = 0
     soft_bonus = 0.0
 
+    # Track professor slot usage per section for cross-section conflict detection
+    prof_slot_sections: dict[str, dict] = {}  # prof_name -> {slot -> [sections]}
+
     for gene in chromosome:
         prof_name = gene["faculty"]
         subj_name = gene["subject"]
         slot = gene["slot"]
         room = gene.get("room", "")
+        section = gene.get("section", "")
 
         if not prof_name:
             penalty += 15
@@ -365,7 +369,16 @@ def calculate_fitness(chromosome: list[dict], faculty_list: list[dict], subject_
             penalty += 40
         slot_assigned.add(slot)
 
-        # Professor overlapping slots
+        # Professor cross-section conflict: same prof, same slot, different section
+        if prof_name not in prof_slot_sections:
+            prof_slot_sections[prof_name] = {}
+        if slot in prof_slot_sections[prof_name]:
+            # Professor already assigned at this slot — heavy penalty
+            penalty += 80
+        else:
+            prof_slot_sections[prof_name][slot] = section
+
+        # Professor overlapping slots (same prof, same slot — legacy check)
         if slot in prof_slots.get(prof_name, set()):
             penalty += 50
         if prof_name in prof_slots:
@@ -779,7 +792,7 @@ def resolve_faculty_slot_overlaps(chromosome: list[dict], faculty_list: list[dic
     max_sweeps = len(resolved) + 1   # generous upper bound
 
     for _ in range(max_sweeps):
-        # Build per-faculty slot → gene-index map
+        # Build per-faculty slot → gene-index map (collision = same prof, same slot)
         fac_slot_map: dict[str, dict[str, list[int]]] = {}
         for idx, gene in enumerate(resolved):
             fname = gene.get("faculty", "")
@@ -842,6 +855,8 @@ def generate_individual(faculty_list: list[dict], subject_list: list[dict]) -> l
 
     # Live load tracker — used to bias assignment toward under-loaded faculty
     live_loads = {f["name"]: 0 for f in faculty_list}
+    # Track which slots each professor is already assigned (prevents double-booking across sections)
+    prof_slot_usage: dict[str, set] = {f["name"]: set() for f in faculty_list}
 
     slot_idx = 0
     for subj in subject_list:
@@ -850,20 +865,53 @@ def generate_individual(faculty_list: list[dict], subject_list: list[dict]) -> l
             random.shuffle(shuffled_slots)
 
         class_type = subj.get("class_type", "LECTURE")
+        section    = subj.get("section", "")
 
-        slot = shuffled_slots[slot_idx]
-        slot_str = f"{slot[0]}: {slot[1]:02d}:00-{slot[2]:02d}:00"
-        slot_idx += 1
+        # Try slots until we find one where the assigned professor is free
+        attempts = 0
+        chosen_slot = None
+        chosen_slot_str = None
+        while attempts < len(shuffled_slots):
+            candidate = shuffled_slots[(slot_idx + attempts) % len(shuffled_slots)]
+            candidate_str = f"{candidate[0]}: {candidate[1]:02d}:00-{candidate[2]:02d}:00"
+            # Check if any eligible professor is free at this slot
+            free_profs = [
+                f["name"] for f in faculty_list
+                if is_eligible(f, subj["name"], live_loads.get(f["name"], 0), candidate_str)
+                and candidate_str not in prof_slot_usage.get(f["name"], set())
+            ]
+            if free_profs:
+                chosen_slot = candidate
+                chosen_slot_str = candidate_str
+                break
+            attempts += 1
+
+        if chosen_slot is None:
+            # Fallback: use the next slot regardless
+            chosen_slot = shuffled_slots[slot_idx % len(shuffled_slots)]
+            chosen_slot_str = f"{chosen_slot[0]}: {chosen_slot[1]:02d}:00-{chosen_slot[2]:02d}:00"
+
+        slot_idx = (slot_idx + attempts + 1) % len(shuffled_slots)
+        slot = chosen_slot
+        slot_str = chosen_slot_str
 
         eligible_profs = [
             f["name"] for f in faculty_list
             if is_eligible(f, subj["name"], live_loads.get(f["name"], 0), slot_str)
+            and slot_str not in prof_slot_usage.get(f["name"], set())
         ]
         if not eligible_profs:
-            # Relax load constraint — allow anyone available that day with right spec
+            # Relax slot-free constraint but keep day availability
             eligible_profs = [
                 f["name"] for f in faculty_list
                 if get_slot_day(slot_str) in f.get("availability", [])
+                and slot_str not in prof_slot_usage.get(f["name"], set())
+            ]
+        if not eligible_profs:
+            # Last resort: anyone not double-booked at this slot
+            eligible_profs = [
+                f["name"] for f in faculty_list
+                if slot_str not in prof_slot_usage.get(f["name"], set())
             ]
         if not eligible_profs:
             eligible_profs = [f["name"] for f in faculty_list]
@@ -917,6 +965,7 @@ def generate_individual(faculty_list: list[dict], subject_list: list[dict]) -> l
                 break
 
         live_loads[selected_prof] = live_loads.get(selected_prof, 0) + 2
+        prof_slot_usage[selected_prof].add(slot_str)
 
         gene = {
             "faculty":      selected_prof,
@@ -926,6 +975,8 @@ def generate_individual(faculty_list: list[dict], subject_list: list[dict]) -> l
             "slot":         slot_str,
             "slot_display": slot_to_12h(slot_str),
             "semester":     subj.get("semester", ""),
+            "year":         subj.get("year", ""),
+            "section":      section,
         }
         gene["room"] = assign_room(gene, room_usage)
         chromosome.append(gene)
@@ -1109,17 +1160,29 @@ def run_ga_endpoint():
             if not s.get("semester") or s.get("semester") == active_semester
         ]
 
-    subjects = [
-        {
-            "name":       s.get("name", ""),
-            "type":       s.get("type", "Core Theory"),
-            "class_type": s.get("class_type", "LECTURE"),
-            "hours":      int(s.get("hours", 2)),
-            "semester":   s.get("semester", active_semester or ""),
-        }
-        for s in subjects_filtered
-        if s.get("name")
-    ]
+    subjects = []
+    for s in subjects_filtered:
+        if not s.get("name"):
+            continue
+        year = s.get("year", "")
+        # Find sections for this year level
+        sections_for_year = [
+            key for key, val in DEFAULT_CLASS_SIZES.items()
+            if val["year"] == year
+        ] if year else []
+        # If no sections found (unknown year), treat as one unnamed section
+        if not sections_for_year:
+            sections_for_year = [""]
+        for sec_key in sorted(sections_for_year):
+            subjects.append({
+                "name":       s.get("name", ""),
+                "type":       s.get("type", "Core Theory"),
+                "class_type": s.get("class_type", "LECTURE"),
+                "hours":      int(s.get("hours", 2)),
+                "semester":   s.get("semester", active_semester or ""),
+                "year":       year,
+                "section":    sec_key,
+            })
 
     pop_size    = max(5,  int(data.get("population",  20)))
     generations = max(10, int(data.get("generations", 50)))

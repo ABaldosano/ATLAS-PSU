@@ -12,11 +12,11 @@
 
 /* ============================================================
    1. CSS DESIGN TOKENS
-   Rust Orange / Slate Gray / Off-White — ATLAS PSU brand
+   Rust Orange / Slate Gray / Off-White - ATLAS PSU brand
    ============================================================ */
 :root {
 
-  /* Primary — Rust Orange (ATLAS brand #c0440a) */
+  /* Primary - Rust Orange (ATLAS brand #c0440a) */
   --clr-primary-50:  #fff3ee;
   --clr-primary-100: #ffe3d5;
   --clr-primary-200: #ffc4a3;
@@ -28,7 +28,7 @@
   --clr-primary-800: #531b04;
   --clr-primary-900: #361002;
 
-  /* Accent — warm amber */
+  /* Accent - warm amber */
   --clr-accent-400: #d97706;
   --clr-accent-500: #b45309;
   --clr-accent-100: #fef3c7;
@@ -53,7 +53,7 @@
   --clr-gray-800: #2a221c;
   --clr-gray-900: #1a130e;
 
-  /* Semantic surface tokens — Off-White base */
+  /* Semantic surface tokens - Off-White base */
   --bg-page:        #f5f2ef;
   --bg-white:       #fffefb;
   --bg-surface:     #fffefb;
@@ -199,7 +199,7 @@ fieldset {
 hr {
   border: none;
   border-top: 1px solid var(--border-subtle);
-  margin: var(--space-2) 0;
+  margin: var(--space-) 0;
 }
 
 /* ============================================================
@@ -310,7 +310,7 @@ code {
 .nav-brand-wrap {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-);
   flex-shrink: 0;
   text-decoration: none;
 }
@@ -509,9 +509,9 @@ code {
    7. PAGE HEADER & SECTION HEADINGS
    ============================================================ */
 .page-header {
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-6);
   padding-bottom: var(--space-5);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 2px solid var(--border-subtle);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -801,13 +801,13 @@ td {
 .units-over   { background: var(--clr-danger-100);  color: #991b1b; }
 
 /* ============================================================
-   12. DASHBOARD — STAT CARDS
+   12. DASHBOARD - STAT CARDS
    ============================================================ */
 .stats-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-4);
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-6);
 }
 
 .stat-card {
@@ -817,7 +817,12 @@ td {
   padding: var(--space-5) var(--space-6);
   box-shadow: var(--card-shadow);
   transition: box-shadow var(--transition-base), transform var(--transition-base);
+  border-left: 3px solid var(--border-default);
 }
+
+.stat-card:first-child { border-left-color: var(--clr-primary-400); }
+.stat-card:nth-child(2) { border-left-color: var(--clr-danger-500); }
+.stat-card:nth-child(3) { border-left-color: var(--clr-success-500); }
 
 .stat-card:hover {
   box-shadow: var(--shadow-md);
@@ -867,6 +872,13 @@ td {
   margin-bottom: var(--space-5);
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
+}
+
+/* When h3 is inside .dashboard-card-header, parent handles the border */
+.dashboard-card-header h3 {
+  margin-bottom: var(--space-1);
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .chart-canvas-wrap {
@@ -1179,7 +1191,7 @@ td {
   margin-bottom: 6px;
 }
 
-/* Select-All buttons row — same 6-column grid as avail-checkboxes */
+/* Select-All buttons row - same 6-column grid as avail-checkboxes */
 .avail-select-all-row {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -1218,7 +1230,7 @@ td {
   border-color: var(--clr-primary-600, #7d4a1e);
 }
 
-/* Availability checkboxes — same 6-column grid as the header buttons */
+/* Availability checkboxes - same 6-column grid as the header buttons */
 .avail-checkboxes {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -1431,7 +1443,7 @@ td {
 }
 
 /* ============================================================
-   21. REPORTS SUMMARY TABLE — grouped rows
+   21. REPORTS SUMMARY TABLE - grouped rows
    ============================================================ */
 .faculty-name-cell {
   font-weight: 600;
@@ -1902,7 +1914,7 @@ a:focus-visible {
 }
 
 /* ============================================================
-   28. SCROLLBAR (global — subtle)
+   28. SCROLLBAR (global - subtle)
    ============================================================ */
 ::-webkit-scrollbar        { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track  { background: transparent; }
@@ -2316,7 +2328,7 @@ body.page-login {
 }
 
 /* ============================================================
-   31. RESPONSIVE — TABLET (≤ 1100px)
+   31. RESPONSIVE - TABLET (≤ 1100px)
    ============================================================ */
 @media (max-width: 1100px) {
   .workload-grid { grid-template-columns: 1fr; }
@@ -2326,7 +2338,7 @@ body.page-login {
 }
 
 /* ============================================================
-   32. RESPONSIVE — MOBILE (≤ 768px)
+   32. RESPONSIVE - MOBILE (≤ 768px)
    ============================================================ */
 @media (max-width: 768px) {
   :root {
@@ -2393,7 +2405,7 @@ body.page-login {
 }
 
 /* ============================================================
-   33. RESPONSIVE — SMALL MOBILE (≤ 480px)
+   33. RESPONSIVE - SMALL MOBILE (≤ 480px)
    ============================================================ */
 @media (max-width: 480px) {
   .stats-row { grid-template-columns: 1fr; }
@@ -2445,8 +2457,82 @@ body.page-login {
   }
 }
 /* ============================================================
-   PHASE 1 ADDITIONS — Room, Class Type, New Subject Types
+   PHASE 3 - Section Badges, Dashboard Schedule Emphasis
    ============================================================ */
+
+/* Section badge (IT1B1, IT2B1, etc.) */
+.section-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--clr-primary-50);
+  border: 1px solid rgba(192, 68, 10, 0.25);
+  color: var(--clr-primary-700);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.section-cell {
+  white-space: nowrap;
+}
+
+.section-tags-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.subject-year-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-3);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  margin-left: 4px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Dashboard schedule card - emphasized (shown first) */
+.dashboard-schedule-card {
+  border-left: 3.5px solid var(--clr-primary-500);
+  margin-bottom: var(--space-5);
+}
+
+.dashboard-chart-secondary {
+  margin-top: var(--space-2);
+}
+
+/* Dashboard card header with subtitle */
+.dashboard-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dashboard-card-header h3 {
+  margin-bottom: var(--space-1);
+}
+
+.dashboard-card-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
 
 /* Class type badge (LECTURE / LAB) */
 .class-type-tag {
@@ -2481,7 +2567,7 @@ body.page-login {
 .type-tag.elective          { background: #f1f5f9; color: #475569; }
 
 /* ============================================================
-   PHASE 2 UI — Room Management, Class Sizes, Soft Constraints
+   PHASE 2 UI - Room Management, Class Sizes, Soft Constraints
    ============================================================ */
 
 /* ── Room Management ── */
@@ -2778,7 +2864,7 @@ body.page-login {
 }
 
 /* ============================================================
-   ACADEMIC MODE — SEMESTER BADGE & PANEL CONTEXT
+   ACADEMIC MODE - SEMESTER BADGE & PANEL CONTEXT
    ============================================================ */
 
 /* Navbar semester badge */
@@ -2971,3 +3057,147 @@ body.page-login {
     padding: 4px 10px;
   }
 }
+
+/* ============================================================
+   PHASE 3 - Dot marker, GA table section col, UX polish
+   ============================================================ */
+
+/* Dot marker for faculty assignment list items */
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--clr-primary-300);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+/* GA schedule table - section column */
+#gaScheduleTable .section-cell {
+  white-space: nowrap;
+}
+#gaScheduleTable .section-badge {
+  margin-right: 2px;
+}
+
+/* Fac-assign section badge spacing */
+.fac-assign-meta .section-badge {
+  font-size: 0.62rem;
+  padding: 0.1rem 0.4rem;
+}
+
+/* Reports summary: section tags inline */
+.section-tags-inline .section-badge {
+  font-size: 0.62rem;
+  padding: 0.1rem 0.4rem;
+}
+
+/* Panel header h2 stronger weight */
+.page-header h2,
+.page-header > div h2 {
+  font-weight: 700;
+}
+
+/* Workload result card - tighter header spacing */
+.workload-result-card h3 {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Schedule table - emphasize faculty name */
+#gaScheduleTable td:first-child {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Reports summary table faculty column */
+#reportsSummaryTable td:first-child strong {
+  font-size: 0.9375rem;
+}
+
+/* Empty state better padding in schedule cards */
+.dashboard-schedule-card .empty-state-msg {
+  padding: var(--space-8) 0;
+  font-size: 0.9rem;
+}
+
+/* Stat card value color for overload */
+#statOverloaded {
+  color: var(--clr-danger-500);
+}
+
+/* Stat sub label improvement */
+.stat-label {
+  font-size: 0.7rem;
+}
+
+/* Timetable section tag (IT1B1 etc.) */
+.tt-section-tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--clr-primary-700);
+  background: var(--clr-primary-50);
+  border: 1px solid rgba(192,68,10,0.2);
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+  margin-bottom: 2px;
+  letter-spacing: 0.03em;
+}
+
+/* Curriculum summary - full-width stacked tables */
+.curriculum-summary-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  margin-top: var(--space-4);
+}
+
+.curriculum-group {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+}
+
+.curriculum-header {
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  background: var(--bg-surface-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.curriculum-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  background: var(--bg-surface);
+}
+
+.curriculum-table thead th {
+  background: var(--bg-surface-2);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.curriculum-table td {
+  padding: 0.5625rem 0.875rem;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.curriculum-table tbody tr:last-child td { border-bottom: none; }
+.curriculum-table tbody tr:hover { background: var(--bg-surface-2); }
+
+.txt-center { text-align: center; }
+.font-mono  { font-family: var(--font-mono); }

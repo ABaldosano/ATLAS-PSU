@@ -98,17 +98,29 @@
           </div>
         </div>
 
-        <div class="dashboard-chart-card">
-          <h3>Faculty Load Distribution</h3>
-          <div class="chart-canvas-wrap">
-            <canvas id="dashboardChart"></canvas>
+        <!-- Schedule assignments emphasized first -->
+        <div class="dashboard-chart-card dashboard-schedule-card">
+          <div class="dashboard-card-header">
+            <div>
+              <h3>Subject Assignments by Faculty</h3>
+              <p class="dashboard-card-sub">Current schedule - faculty workload and assigned subjects per section</p>
+            </div>
+          </div>
+          <div id="dashboardFacultyAssignments" class="faculty-assignments-container">
+            <p class="empty-state-msg">Run the optimization to see faculty-subject assignments.</p>
           </div>
         </div>
 
-        <div class="dashboard-chart-card" style="margin-top:20px;">
-          <h3>Subject Assignments by Faculty</h3>
-          <div id="dashboardFacultyAssignments" class="faculty-assignments-container">
-            <p class="empty-state-msg">Run the optimization to see faculty-subject assignments.</p>
+        <!-- Workload chart secondary -->
+        <div class="dashboard-chart-card dashboard-chart-secondary">
+          <div class="dashboard-card-header">
+            <div>
+              <h3>Faculty Load Distribution</h3>
+              <p class="dashboard-card-sub">Unit totals per faculty member - click legend to sort by load status</p>
+            </div>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="dashboardChart"></canvas>
           </div>
         </div>
       </section>
@@ -184,6 +196,7 @@
                   <tr>
                     <th data-key="faculty">Faculty <span class="sort-arrow">&#9650;</span></th>
                     <th data-key="subject">Subject <span class="sort-arrow">&#9650;</span></th>
+                    <th data-key="section">Section</th>
                     <th data-key="type">Type <span class="sort-arrow">&#9650;</span></th>
                     <th data-key="class_type">Class <span class="sort-arrow">&#9650;</span></th>
                     <th data-key="slot">Slot <span class="sort-arrow">&#9650;</span></th>
@@ -440,7 +453,7 @@
             <div class="modal-form-group">
               <label for="scPreferredPeriod">Preferred Teaching Period</label>
               <select id="scPreferredPeriod">
-                <option value="">— No Preference —</option>
+                <option value="">- No Preference -</option>
                 <option value="morning">Morning (7 AM – 12 PM)</option>
                 <option value="afternoon">Afternoon (12 PM – 5 PM)</option>
                 <option value="evening">Evening (5 PM onwards)</option>
@@ -449,13 +462,13 @@
             <div class="modal-form-group">
               <label for="scPreferredRoom">Room Preference</label>
               <select id="scPreferredRoom">
-                <option value="">— No Preference —</option>
+                <option value="">- No Preference -</option>
               </select>
             </div>
             <div class="modal-form-group">
               <label for="scPreferredBuilding">Building Preference</label>
               <select id="scPreferredBuilding">
-                <option value="">— No Preference —</option>
+                <option value="">- No Preference -</option>
                 <option value="CL">CL Building</option>
                 <option value="IT Room">IT Room Building</option>
                 <option value="GA Bldg">GA Building</option>
@@ -466,7 +479,7 @@
             <div class="modal-form-group">
               <label for="scPreferredFloor">Floor Preference</label>
               <select id="scPreferredFloor">
-                <option value="">— No Preference —</option>
+                <option value="">- No Preference -</option>
                 <option value="1">Floor 1</option>
                 <option value="2">Floor 2</option>
                 <option value="3">Floor 3</option>
