@@ -27,7 +27,7 @@ SUBJECT_TYPES = [
 
 # ── Specialization Map ────────────────────────────────────────────────────────
 SPECIALIZATION_MAP = {
-    "Introduction to Computing":                           ["Core Theory"],
+    "Introduction to Computing":                          ["Core Theory", "Elective"],
     "Computer Programming 1":                             ["Programming"],
     "Discrete Mathematics":                               ["Mathematics"],
     "Introduction to Human Computer Interaction":         ["Applied Computing"],
@@ -52,13 +52,13 @@ SPECIALIZATION_MAP = {
     "Geographic Information System":                      ["Applied Computing"],
     "Embedded System":                                    ["Applied Computing", "Systems"],
     "Information Assurance and Security 2":               ["Networks & Security"],
-    "Capstone Project and Research 1":                    ["Research & Capstone"],
+    "Capstone Project and Research 1":                    ["Research & Capstone", "Elective"],
     "Systems Administration and Maintenance":             ["Systems"],
-    "Capstone Project and Research 2":                    ["Research & Capstone"],
+    "Capstone Project and Research 2":                    ["Research & Capstone", "Elective"],
     "IT Elective 4":                                      ["Elective"],
-    "Educational Tour in IT Industry":                    ["Industry Practice"],
-    "Thesis Writing and Colloquium":                      ["Research & Capstone"],
-    "Practicum (486 Hours)":                              ["Industry Practice"],
+    "Educational Tour in IT Industry":                    ["Industry Practice", "Elective"],
+    "Thesis Writing and Colloquium":                      ["Research & Capstone", "Elective"],
+    "Practicum (486 Hours)":                              ["Industry Practice", "Elective"],
 }
 
 # ── Default Class Sizes ───────────────────────────────────────────────────────

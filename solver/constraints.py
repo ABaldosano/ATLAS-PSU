@@ -14,9 +14,17 @@ def get_required_specs(subject_name: str, static_lookup: dict) -> list:
 
 
 def faculty_qualifies(faculty: dict, subject_name: str, static_lookup: dict) -> bool:
-    """True if faculty can teach this subject (specialization match or elective)."""
     if subject_name.startswith("IT Elective"):
         return True
+    required = get_required_specs(subject_name, static_lookup)
+    if "Elective" in required and not any(
+        s for s in required if s != "Elective"
+    ):
+        return True  # open assignment — any faculty qualifies
+    if "Elective" in required:
+        fac_specs = faculty.get("specialization", [])
+        primary = [s for s in required if s != "Elective"]
+        return any(spec in fac_specs for spec in primary) or True
     required = get_required_specs(subject_name, static_lookup)
     if not required:
         return True
