@@ -1,69 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="../assets/images/favicon.png">
-    <title>Login</title>
-    <link rel="stylesheet" href="../assets/css/main-style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="../assets/images/favicon.png">
+  <title>Login | ATLAS PSU</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/main-style.css">
 </head>
 <body class="page-login">
-    <div class="login-card">
-        <div class="brand-top">ATLAS PSU</div>
-        <h1>Sign In</h1>
-        <p class="subtitle">Automated Teaching Load Assignment System</p>
-        
-        <div class="error-msg" id="errorMsg"></div>
 
-        <label for="department">Department</label>
-        <div class="select-wrap">
-            <select id="department">
-                <option value="" disabled selected>Select your department</option>
-                <option value="IT">Information Technology</option>
-                <option value="CS">Computer Science</option>
-                <option value="MB">Marine Biology</option>
-                <option value="ES">Environmental Science</option>
-                <option value="MedB">Medical Biology</option>
-            </select>
-        </div>
+  <div class="login-card">
+    <div class="brand-top">ATLAS PSU</div>
+    <h1>Sign In</h1>
+    <p class="subtitle">Automated Teaching Load Assignment System</p>
 
-        <label for="username">Username</label>
-        <input type="text" id="username" placeholder="Enter username" autocomplete="username">
+    <div class="error-msg" id="errorMsg"></div>
 
-        <label for="password">Password</label>
-        <input type="password" id="password" placeholder="Enter password" autocomplete="current-password">
-
-        <button class="btn-login-submit" id="loginBtn">Login</button>
-
-        <div class="login-footer-text">
-          <a href="../index.html">← Back</a>
-        </div>
+    <label for="department">Department</label>
+    <div class="select-wrap">
+      <select id="department">
+        <option value="" disabled selected>Select your department</option>
+        <option value="IT">Information Technology</option>
+        <option value="CS">Computer Science</option>
+        <option value="MB">Marine Biology</option>
+        <option value="ES">Environmental Science</option>
+        <option value="MedB">Medical Biology</option>
+      </select>
     </div>
 
-    <script>
-        document.getElementById('loginBtn').addEventListener('click', () => {
-            const dept = document.getElementById('department').value;
-            const user = document.getElementById('username').value.trim();
-            const err = document.getElementById('errorMsg');
+    <label for="username">Username</label>
+    <input type="text" id="username" placeholder="Enter username" autocomplete="username">
 
-            // Only validate username
-            if (!user) {
-                err.textContent = 'Please enter your username.';
-                err.classList.add('show');
-                return;
-            }
+    <label for="password">Password</label>
+    <input type="password" id="password" placeholder="Enter password" autocomplete="current-password">
 
-            // Save data if provided, then redirect
-            sessionStorage.setItem('atlasDept', dept);
-            sessionStorage.setItem('atlasUser', user);
-            
-            err.classList.remove('show');
-            window.location.href = 'dashboard.html';
-        });
+    <button class="btn-login-submit" id="loginBtn">Login</button>
 
-        document.addEventListener('keydown', e => {
-            if (e.key === 'Enter') document.getElementById('loginBtn').click();
-        });
-    </script>
+    <div class="login-footer-text">
+      <a href="../index.html">← Back</a>
+    </div>
+  </div>
+
+  <script src="../assets/js/main-script.js" defer></script>
 </body>
 </html>

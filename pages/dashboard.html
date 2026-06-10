@@ -6,12 +6,7 @@
   <link rel="icon" type="image/png" href="../assets/images/favicon.png">
   <title>Dashboard</title>
 
-  <!-- Auth guard -->
-  <script>
-    if (!sessionStorage.getItem('atlasUser')) {
-      window.location.href = 'login.html';
-    }
-  </script>
+  <!-- Auth guard (lives in main-script.js → initDashboardPage) -->
 
   <!-- External Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
@@ -75,7 +70,7 @@
         <div class="page-header">
           <div>
             <h2>Faculty Optimization Dashboard</h2>
-            <p>Real-time academic workload analytics and faculty distribution insights powered by genetic algorithm optimization.</p>
+            <p>Real-time academic workload analytics and faculty distribution insights supported by CP-SAT and genetic algorithm optimization.</p>
           </div>
           <div id="dashboardSemContext" class="sem-context-badge" style="display:none;"></div>
         </div>
@@ -103,7 +98,7 @@
           <div class="dashboard-card-header">
             <div>
               <h3>Subject Assignments by Faculty</h3>
-              <p class="dashboard-card-sub">Current schedule - faculty workload and assigned subjects per section</p>
+              <p class="dashboard-card-sub">Current schedule: faculty workload and assigned subjects per section</p>
             </div>
           </div>
           <div id="dashboardFacultyAssignments" class="faculty-assignments-container">
@@ -116,7 +111,7 @@
           <div class="dashboard-card-header">
             <div>
               <h3>Faculty Load Distribution</h3>
-              <p class="dashboard-card-sub">Unit totals per faculty member - click legend to sort by load status</p>
+              <p class="dashboard-card-sub">Unit totals for each faculty member (sort by load status by clicking the legend)</p>
             </div>
           </div>
           <div class="chart-canvas-wrap">
@@ -130,7 +125,7 @@
         <div class="page-header">
           <div>
             <h2>Workload Optimization Engine</h2>
-            <p>Generate balanced faculty schedules using adaptive genetic optimization with real-time progress visualization.</p>
+            <p>Generate balanced faculty schedules using adaptive genetic optimization with real-time progress display.</p>
           </div>
           <div id="optimizationSemContext" class="sem-context-badge" style="display:none;"></div>
         </div>
@@ -141,28 +136,28 @@
           <!-- Fixed the image source to a direct .gif file link -->
           <img src="https://cdn.dribbble.com/userupload/21115803/file/original-d31905ca435978c16c479e8fc0da3227.gif" class="ga-image" alt="Genetic Algorithm">
           
-          <p class="subtitle">Powered by Genetic Algorithm</p>
+          <p class="subtitle">Powered by:<br>CP-SAT & Genetic Algorithm</p>
           
           <button id="runGA" class="btn btn-full" aria-label="Run optimization">
             Run Optimization
           </button>
           
           <details class="advanced-settings">
-            <summary>Advanced Settings</summary>
+            <summary>GA Parameters</summary>
             <div class="settings-body">
               <label for="populationSize">Population Size 
-                <input type="number" id="populationSize" value="20" min="5" max="200">
+                <input type="number" id="populationSize" value="30" min="5" max="200">
               </label>
               <label for="numGenerations">Generations 
-                <input type="number" id="numGenerations" value="50" min="10" max="1000">
+                <input type="number" id="numGenerations" value="70" min="10" max="1000">
               </label>
               <label for="mutationRate">Mutation Rate 
-                <input type="number" id="mutationRate" value="0.1" step="0.01" min="0" max="1">
+                <input type="number" id="mutationRate" value="0.09" step="0.01" min="0" max="1">
               </label>
               <label for="crossoverRate">Crossover Rate 
-                <input type="number" id="crossoverRate" value="0.8" step="0.1" min="0" max="1">
+                <input type="number" id="crossoverRate" value="0.95" step="0.1" min="0" max="1">
               </label>
-              <p class="ched-note">&#9432; Load limits enforced: standard max <strong>24 units</strong>, overload cap <strong>30 units</strong> - per CHED guidelines (CMO No. 40, s. 2006).</p>
+              <p class="ched-note">&#9432; Load limits enforced: standard max <strong>24 units</strong>, overload cap <strong>30 units</strong>, as per CHED guidelines (CMO No. 40, s. 2006).</p>
             </div>
           </details>
         </div>
@@ -215,7 +210,7 @@
         <div class="page-header">
           <div>
             <h2>Faculty Analytics &amp; Reports</h2>
-            <p>Visual workload distribution, scheduling metrics, and export-ready institutional summaries.</p>
+            <p>Visual task distribution, scheduling analytics, and export-ready institutional summaries.</p>
           </div>
           <div id="reportsSemContext" class="sem-context-badge" style="display:none;"></div>
         </div>
@@ -291,7 +286,7 @@
       <section class="panel" aria-label="Faculty and Curriculum Management">
         <div class="page-header">
           <h2>Faculty &amp; Curriculum Management</h2>
-          <p>Manage faculty specializations, teaching capacities, academic subjects, and scheduling parameters. Changes are saved automatically.</p>
+          <p>Manage faculty specializations, teaching load, academic subjects, and scheduling constraints. Changes are automatically saved.</p>
         </div>
 
         <h3 class="section-heading">Faculty Management</h3>
@@ -569,28 +564,6 @@
   <!-- Toast notification -->
   <div id="toastNotif" class="toast-notif" aria-live="polite"></div>
 
-  <script>
-    // Show department in profile label
-    window.addEventListener('DOMContentLoaded', () => {
-      const deptMap = { IT:'IT Dept', CS:'CS Dept', MB:'Marine Bio', ES:'Env. Science', MedB:'Med Biology' };
-      const dept = sessionStorage.getItem('atlasDept');
-      const user = sessionStorage.getItem('atlasUser');
-      const lbl  = document.getElementById('navUserLabel');
-      if (lbl && user) lbl.textContent = user + (dept ? ' · ' + (deptMap[dept] || dept) : '');
-
-      // Profile dropdown - click to open/close
-      const profileDrop = document.querySelector('.nav-item.dropdown');
-      if (profileDrop) {
-        profileDrop.addEventListener('click', e => {
-          e.stopPropagation();
-          profileDrop.classList.toggle('open');
-        });
-        document.addEventListener('click', () => {
-          profileDrop.classList.remove('open');
-        });
-      }
-    });
-  </script>
 
 </body>
 </html>

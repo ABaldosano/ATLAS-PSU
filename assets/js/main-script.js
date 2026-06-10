@@ -1,7 +1,17 @@
 /* ============================================================
    ATLAS PSU - main-script.js
    Automated Teaching Load Assignment System
+   Single universal script for index, login, and dashboard.
    ============================================================ */
+
+/* ── Auth guard (dashboard only, runs before DOMContentLoaded) ── */
+(function authGuard() {
+  if (document.getElementById('navUserLabel') !== null) return; // DOM not ready yet; handled in initDashboardPage
+  // Check via URL path so the guard only fires on the dashboard page
+  if (window.location.pathname.includes('dashboard') && !sessionStorage.getItem('atlasUser')) {
+    window.location.href = 'login.html';
+  }
+})();
 
 'use strict';
 
@@ -535,21 +545,13 @@ function updateReportsPanel(data) {
 
       return `
         <tr>
-          <td>
-            <div class="summary-subj-name">${escapeHTML(item.subject)}</div>
-          </td>
+          <td><div class="summary-subj-name">${escapeHTML(item.subject)}</div></td>
           <td>
             <span class="class-type-tag ${ctClass}">${escapeHTML(item.class_type || 'LECTURE')}</span>
             ${sectionTag}
           </td>
-          <td>
-            <div class="summary-slot-room">
-              <span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(displaySlot)}</span>
-            </div>
-          </td>
-          <td class="summary-td-right">
-            ${item.room ? `<span class="room-badge">${escapeHTML(item.room)}</span>` : '<span class="text-muted">—</span>'}
-          </td>
+          <td>${displaySlot ? `<span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(displaySlot)}</span>` : '<span class="text-muted">—</span>'}</td>
+          <td>${item.room ? `<span class="room-badge">${escapeHTML(item.room)}</span>` : '<span class="text-muted">—</span>'}</td>
         </tr>`;
     }).join('');
 
@@ -570,12 +572,18 @@ function updateReportsPanel(data) {
         </div>
       </div>
       <table class="summary-assignments-table">
+        <colgroup>
+          <col class="col-subject">
+          <col class="col-type">
+          <col class="col-schedule">
+          <col class="col-room">
+        </colgroup>
         <thead>
           <tr>
             <th>Subject</th>
-            <th>Type / Section</th>
+            <th>Type</th>
             <th>Schedule</th>
-            <th style="text-align:right;">Room</th>
+            <th>Room</th>
           </tr>
         </thead>
         <tbody>${rowsHTML}</tbody>
@@ -1226,7 +1234,7 @@ function initEditFacultyModal() {
 
     nameInput.value  = facultyName;
     unitsInput.value = currentUnits;
-    if (titleEl) titleEl.textContent = `Edit — ${facultyName}`;
+    if (titleEl) titleEl.textContent = `Edit: ${facultyName}`;
 
     // Populate assignment list from lastGAResult
     const list = document.getElementById('editAssignmentList');
@@ -1741,12 +1749,13 @@ function generatePrintReport() {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Inter', Arial, sans-serif;
+      font-family: Arial, Helvetica, sans-serif;
       font-size: 10.5pt;
-      color: #1e293b;
+      color: #000;
       background: #fff;
       line-height: 1.5;
     }
+
     /* ── COVER PAGE ── */
     .cover {
       min-height: 100vh;
@@ -1756,14 +1765,15 @@ function generatePrintReport() {
       align-items: center;
       text-align: center;
       padding: 60px 48px;
-      background: linear-gradient(145deg, #1a0a04 0%, #6b2106 55%, #c0440a 100%);
-      color: #fff;
+      background: #fff;
+      color: #000;
       page-break-after: always;
+      border-bottom: 3px solid #000;
     }
     .cover-logo {
       width: 72px;
       height: 72px;
-      background: rgba(255,255,255,0.15);
+      background: #000;
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -1771,19 +1781,21 @@ function generatePrintReport() {
       margin-bottom: 24px;
       font-size: 24pt;
       font-weight: bold;
+      color: #fff;
     }
     .cover h1 {
-      font-size: 28pt;
+      font-size: 26pt;
       font-weight: 800;
       letter-spacing: -0.02em;
       line-height: 1.15;
       margin-bottom: 12px;
+      color: #000;
     }
     .cover .subtitle {
-      font-size: 14pt;
-      opacity: 0.9;
+      font-size: 13pt;
       margin-bottom: 48px;
       font-weight: 400;
+      color: #333;
     }
     .cover-meta {
       display: grid;
@@ -1792,60 +1804,43 @@ function generatePrintReport() {
       max-width: 500px;
       width: 100%;
       text-align: left;
-      background: rgba(0, 0, 0, 0.2);
+      border: 2px solid #000;
       padding: 24px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
     }
-    .cover-meta-item {
-      display: flex;
-      flex-direction: column;
-    }
+    .cover-meta-item { display: flex; flex-direction: column; }
     .cover-meta-label {
       font-size: 8pt;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      opacity: 0.6;
+      color: #666;
       margin-bottom: 4px;
     }
-    .cover-meta-value {
-      font-size: 11pt;
-      font-weight: 600;
-    }
+    .cover-meta-value { font-size: 11pt; font-weight: 700; color: #000; }
 
-    /* ── REPORT CONTENT STYLES ── */
+    /* ── PAGES ── */
     .page {
       padding: 50px 60px;
       page-break-after: always;
     }
-    .page:last-child {
-      page-break-after: avoid;
-    }
+    .page:last-child { page-break-after: avoid; }
     .page-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
-      border-bottom: 2px solid #e2e8f0;
+      border-bottom: 2px solid #000;
       padding-bottom: 12px;
       margin-bottom: 30px;
     }
     .page-header h2 {
-      font-size: 14pt;
+      font-size: 13pt;
       font-weight: 700;
-      color: #0f172a;
+      color: #000;
       text-transform: uppercase;
       letter-spacing: 0.02em;
     }
-    .page-header .page-meta {
-      font-size: 9pt;
-      color: #64748b;
-    }
-    h3 {
-      font-size: 12pt;
-      color: #0f172a;
-      margin-bottom: 16px;
-      font-weight: 700;
-    }
+    .page-header .page-meta { font-size: 9pt; color: #555; }
+    h3 { font-size: 11pt; color: #000; margin-bottom: 16px; font-weight: 700; }
 
     /* ── ANALYTICS CARDS ── */
     .fairness-summary-grid {
@@ -1855,123 +1850,103 @@ function generatePrintReport() {
       margin-bottom: 32px;
     }
     .fairness-item {
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
+      border: 1.5px solid #000;
+      border-radius: 6px;
       padding: 14px 16px;
-      background: #f8fafc;
+      background: #fff;
     }
     .fairness-item .f-label {
-      font-size: 8pt;
+      font-size: 7.5pt;
       text-transform: uppercase;
       letter-spacing: 0.07em;
-      color: #64748b;
+      color: #555;
       font-weight: 600;
     }
     .fairness-item .f-value {
-      font-size: 22pt;
+      font-size: 20pt;
       font-weight: 700;
       margin: 4px 0 2px;
       line-height: 1;
+      color: #000;
     }
-    .fairness-item .f-sub {
-      font-size: 8pt;
-      color: #94a3b8;
-    }
+    .fairness-item .f-sub { font-size: 7.5pt; color: #777; }
 
-    /* ── FACULTY TABLE ── */
+    /* ── TABLES ── */
     .report-table {
       width: 100%;
       border-collapse: collapse;
       font-size: 9.5pt;
       margin-bottom: 24px;
     }
-    .report-table thead tr {
-      background: #1a0a04;
-      color: #fff;
-    }
+    .report-table thead tr { background: #000; color: #fff; }
     .report-table th {
-      padding: 10px 12px;
-      font-weight: 600;
+      padding: 9px 12px;
+      font-weight: 700;
       text-align: left;
-      font-size: 9pt;
+      font-size: 8.5pt;
       text-transform: uppercase;
       letter-spacing: 0.03em;
     }
     .report-table td {
-      padding: 10px 12px;
-      border-bottom: 1px solid #e2e8f0;
-      color: #334155;
+      padding: 9px 12px;
+      border-bottom: 1px solid #ccc;
+      color: #000;
     }
-    .report-table tr:nth-child(even) {
-      background: #f8fafc;
-    }
+    .report-table tr:nth-child(even) { background: #f5f5f5; }
     .txt-center { text-align: center !important; }
-    .font-mono { font-family: 'JetBrains Mono', Consolas, monospace; }
+    .font-mono { font-family: Consolas, 'Courier New', monospace; }
 
-    /* Tags */
+    /* ── TAGS (all B&W) ── */
     .print-status-tag {
       display: inline-block;
       padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 8pt;
+      border: 1.5px solid #000;
+      border-radius: 3px;
+      font-size: 7.5pt;
       font-weight: 700;
       text-transform: uppercase;
+      color: #000;
+      background: #fff;
     }
-    .print-status-tag.normal { background: #dcfce7; color: #15803d; }
-    .print-status-tag.maxload { background: #fef3c7; color: #b45309; }
-    .print-status-tag.overload { background: #fee2e2; color: #b91c1c; }
-
     .print-class-tag {
       display: inline-block;
       padding: 2px 6px;
-      border-radius: 4px;
+      border: 1px solid #555;
+      border-radius: 3px;
       font-size: 7.5pt;
       font-weight: 700;
       text-transform: uppercase;
+      color: #000;
+      background: #fff;
     }
-    .print-class-tag.lecture { background: #e0f2fe; color: #0369a1; }
-    .print-class-tag.lab     { background: #f3e8ff; color: #6b21a8; }
-
     .room-cell {
-      font-family: 'JetBrains Mono', Consolas, monospace;
+      font-family: Consolas, 'Courier New', monospace;
       font-size: 8.5pt;
-      color: #7c3aed;
-      font-weight: 600;
+      font-weight: 700;
+      color: #000;
     }
-
     .type-tag {
       display: inline-block;
       padding: 2px 6px;
-      border-radius: 4px;
+      border: 1px solid #555;
+      border-radius: 3px;
       font-size: 7.5pt;
       font-weight: 600;
       text-transform: uppercase;
+      color: #000;
+      background: #fff;
     }
-    .type-tag.software { background: #e0f2fe; color: #0369a1; }
-    .type-tag.database { background: #f3e8ff; color: #6b21a8; }
-    .type-tag.networking { background: #e2e8f0; color: #475569; }
-    .type-tag.elective { background: #fef3c7; color: #d97706; }
 
-    /* ── SIGNATURE STAMPS ── */
+    /* ── SIGNATURE ── */
     .sign-zone {
       margin-top: 60px;
       display: flex;
       justify-content: space-between;
       page-break-inside: avoid;
     }
-    .sign-block {
-      width: 240px;
-      text-align: center;
-    }
-    .sign-line {
-      border-top: 1px solid #94a3b8;
-      margin-top: 45px;
-      margin-bottom: 6px;
-    }
-    .sign-title {
-      font-size: 9pt;
-      color: #64748b;
-    }
+    .sign-block { width: 240px; text-align: center; }
+    .sign-line { border-top: 1.5px solid #000; margin-top: 45px; margin-bottom: 6px; }
+    .sign-title { font-size: 9pt; color: #555; }
 
     @media print {
       body { background: #fff; color: #000; }
@@ -2026,7 +2001,7 @@ function generatePrintReport() {
       <div class="fairness-item">
         <div class="f-label">Jain's Index</div>
         <div class="f-value">${fJain}</div>
-        <div class="f-sub">Equality metric (0-1)</div>
+        <div class="f-sub">Equality metric (0–1)</div>
       </div>
       <div class="fairness-item">
         <div class="f-label">Specialization Match</div>
@@ -2046,8 +2021,8 @@ function generatePrintReport() {
         <tr>
           <th>Faculty Member</th>
           <th class="txt-center" style="width: 100px;">Total Load</th>
-          <th style="width: 130px;">Status Tag</th>
-          <th>Subjects Pool Matrix Track</th>
+          <th style="width: 130px;">Status</th>
+          <th>Assigned Subjects</th>
         </tr>
       </thead>
       <tbody>
@@ -2063,7 +2038,7 @@ function generatePrintReport() {
       </div>
       <div class="sign-block">
         <div class="sign-line"></div>
-        <strong>Dr. Jane Doe</strong><br>
+        <strong>College Dean</strong><br>
         <span class="sign-title">College Dean</span>
       </div>
     </div>
@@ -2071,19 +2046,19 @@ function generatePrintReport() {
 
   <div class="page">
     <div class="page-header">
-      <h2>II. Master Schedule Allocations Matrix</h2>
+      <h2>II. Master Schedule Allocations</h2>
       <span class="page-meta">ATLAS PSU Engine · Page 3</span>
     </div>
 
     <table class="report-table">
       <thead>
         <tr>
-          <th style="width: 180px;">Time Slot & Day</th>
-          <th>Subject Description Name Title</th>
-          <th style="width: 120px;">Domain Type</th>
-          <th>Assigned Professor</th>
-          <th style="width: 100px;">Room</th>
-          <th style="width: 80px;">Class</th>
+          <th style="width: 160px;">Time Slot &amp; Day</th>
+          <th>Subject</th>
+          <th style="width: 110px;">Type</th>
+          <th>Faculty</th>
+          <th style="width: 90px;">Room</th>
+          <th style="width: 70px;">Class</th>
         </tr>
       </thead>
       <tbody>
@@ -2715,3 +2690,71 @@ function showToast(msg, type = 'info') {
 }
 
 window.switchPanel = switchPanel;
+/* ============================================================
+   LOGIN PAGE — login.html inline script (migrated)
+   ============================================================ */
+(function initLoginPage() {
+  const loginBtn = document.getElementById('loginBtn');
+  if (!loginBtn) return; // not on login page
+
+  loginBtn.addEventListener('click', () => {
+    const dept = document.getElementById('department').value;
+    const user = document.getElementById('username').value.trim();
+    const err  = document.getElementById('errorMsg');
+
+    if (!user) {
+      err.textContent = 'Please enter your username.';
+      err.classList.add('show');
+      return;
+    }
+
+    sessionStorage.setItem('atlasDept', dept);
+    sessionStorage.setItem('atlasUser', user);
+    err.classList.remove('show');
+    window.location.href = 'dashboard.html';
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') loginBtn.click();
+  });
+})();
+
+/* ============================================================
+   DASHBOARD PAGE — dashboard.html inline script (migrated)
+   ============================================================ */
+(function initDashboardPage() {
+  // Auth guard — runs after defer, DOM is available
+  if (window.location.pathname.includes('dashboard') && !sessionStorage.getItem('atlasUser')) {
+    window.location.href = 'login.html';
+    return;
+  }
+
+  const navUserLabel = document.getElementById('navUserLabel');
+  if (!navUserLabel) return; // not on dashboard
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const deptMap = {
+      IT:   'IT Dept',
+      CS:   'CS Dept',
+      MB:   'Marine Bio',
+      ES:   'Env. Science',
+      MedB: 'Med Biology',
+    };
+    const dept = sessionStorage.getItem('atlasDept');
+    const user = sessionStorage.getItem('atlasUser');
+    const lbl  = document.getElementById('navUserLabel');
+    if (lbl && user) lbl.textContent = user + (dept ? ' · ' + (deptMap[dept] || dept) : '');
+
+    // Profile dropdown — click to open/close
+    const profileDrop = document.querySelector('.nav-item.dropdown');
+    if (profileDrop) {
+      profileDrop.addEventListener('click', e => {
+        e.stopPropagation();
+        profileDrop.classList.toggle('open');
+      });
+      document.addEventListener('click', () => {
+        profileDrop.classList.remove('open');
+      });
+    }
+  });
+})();
