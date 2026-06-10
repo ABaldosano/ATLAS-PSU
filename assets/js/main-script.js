@@ -494,46 +494,94 @@ function updateReportsPanel(data) {
     byFaculty[item.faculty].push(item);
   });
 
-  const tbody = document.querySelector('#reportsSummaryTable tbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
+  // Find the legacy table wrapper — we replace its parent or insert sibling
+  const legacyTable = document.getElementById('reportsSummaryTable');
+  if (!legacyTable) return;
 
-  Object.keys(byFaculty).sort().forEach(faculty => {
+  // Build or reuse the summary grid container
+  let grid = document.getElementById('reportsSummaryGrid');
+  if (!grid) {
+    grid = document.createElement('div');
+    grid.id = 'reportsSummaryGrid';
+    grid.className = 'summary-faculty-grid';
+    legacyTable.parentNode.insertBefore(grid, legacyTable);
+    legacyTable.style.display = 'none'; // hide old table
+  }
+  grid.innerHTML = '';
+
+  const sortedFaculty = Object.keys(byFaculty).sort();
+
+  sortedFaculty.forEach(faculty => {
     const assignments = byFaculty[faculty];
-    const totalUnits = assignments.length * 2;
-    const unitsCls = totalUnits > MAX_UNITS ? 'units-over' : totalUnits === MAX_UNITS ? 'units-max' : 'units-ok';
+    const totalUnits  = assignments.length * 2;
+    const unitsCls    = totalUnits > MAX_UNITS ? 'units-over' : totalUnits === MAX_UNITS ? 'units-max' : 'units-ok';
 
-    assignments.forEach((item, idx) => {
-      const day = item.slot.split(':')[0].trim();
-      const displaySlot = item.slot_display || item.slot;
-      const tr = document.createElement('tr');
-
-      const subjectSlotHTML = `
-        <td>
-          <span>${escapeHTML(item.subject)}</span>
-          ${item.section ? `<span class="section-badge" style="margin-left:4px;">${escapeHTML(item.section)}</span>` : (item.year ? `<span class="subject-year-badge">${escapeHTML(item.year.replace(' Year','Y'))}</span>` : '')}<br>
-          <span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(displaySlot)}</span>
-          ${item.room ? `<span class="room-badge" style="margin-left:4px;"> ${escapeHTML(item.room)}</span>` : ''}
-          <span class="class-type-tag ${(item.class_type||'LECTURE').toLowerCase()}" style="margin-left:4px;">${escapeHTML(item.class_type||'LECTURE')}</span>
-        </td>`;
-
-      if (idx === 0) {
-        tr.innerHTML = `
-          <td rowspan="${assignments.length}">
-            <strong>${escapeHTML(faculty)}</strong>
-          </td>
-          ${subjectSlotHTML}
-          <td rowspan="${assignments.length}">
-            <span class="units-badge ${unitsCls}">${totalUnits}</span>
-          </td>
-          <td rowspan="${assignments.length}">
-            <button class="btn-edit-faculty btn" data-faculty="${escapeAttr(faculty)}">&#9998; Edit</button>
-          </td>`;
-      } else {
-        tr.innerHTML = subjectSlotHTML;
-      }
-      tbody.appendChild(tr);
+    // Sort assignments: by day order then time
+    const sorted = [...assignments].sort((a, b) => {
+      const parseSlot = s => {
+        const [d, t] = (s || '').split(':');
+        return (DAY_ORDER[d.trim()] || 0) * 100 + parseInt(t || '0');
+      };
+      return parseSlot(a.slot) - parseSlot(b.slot);
     });
+
+    const rowsHTML = sorted.map(item => {
+      const day         = (item.slot || '').split(':')[0].trim();
+      const displaySlot = item.slot_display || item.slot || '';
+      const ctClass     = (item.class_type || 'LECTURE').toLowerCase();
+      const sectionTag  = item.section
+        ? `<span class="section-badge">${escapeHTML(item.section)}</span>`
+        : (item.year ? `<span class="subject-year-badge">${escapeHTML(item.year.replace(' Year','Y'))}</span>` : '');
+
+      return `
+        <tr>
+          <td>
+            <div class="summary-subj-name">${escapeHTML(item.subject)}</div>
+          </td>
+          <td>
+            <span class="class-type-tag ${ctClass}">${escapeHTML(item.class_type || 'LECTURE')}</span>
+            ${sectionTag}
+          </td>
+          <td>
+            <div class="summary-slot-room">
+              <span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(displaySlot)}</span>
+            </div>
+          </td>
+          <td class="summary-td-right">
+            ${item.room ? `<span class="room-badge">${escapeHTML(item.room)}</span>` : '<span class="text-muted">—</span>'}
+          </td>
+        </tr>`;
+    }).join('');
+
+    const initials = faculty.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+
+    const card = document.createElement('div');
+    card.className = 'summary-faculty-card';
+    card.innerHTML = `
+      <div class="summary-fac-header">
+        <div class="summary-fac-avatar">${escapeHTML(initials)}</div>
+        <div class="summary-fac-info">
+          <div class="summary-fac-name">${escapeHTML(faculty)}</div>
+          <div class="summary-fac-count">${assignments.length} assignment${assignments.length !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="summary-fac-actions">
+          <span class="units-badge ${unitsCls}">${totalUnits} units</span>
+          <button class="btn-edit-faculty btn" data-faculty="${escapeAttr(faculty)}">&#9998; Edit</button>
+        </div>
+      </div>
+      <table class="summary-assignments-table">
+        <thead>
+          <tr>
+            <th>Subject</th>
+            <th>Type / Section</th>
+            <th>Schedule</th>
+            <th style="text-align:right;">Room</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHTML}</tbody>
+      </table>`;
+
+    grid.appendChild(card);
   });
 }
 
@@ -1105,13 +1153,89 @@ function initEditFacultyModal() {
   const titleEl     = document.getElementById('editModalTitle');
   if (!modal) return;
 
+  // ── Build the expanded modal body once ──────────────────────────────
+  const existingBody = modal.querySelector('.modal-body');
+  if (existingBody && !existingBody.querySelector('.modal-section-label')) {
+    // Append assignment editor below the units field
+    existingBody.insertAdjacentHTML('beforeend', `
+      <hr class="modal-section-divider">
+      <div class="modal-section-label">Assigned Subjects, Times &amp; Rooms</div>
+      <div id="editAssignmentList" class="modal-assignment-list"></div>
+      <button type="button" id="editAddAssignment" class="modal-add-assignment-btn">
+        <span style="font-size:1.1em;">+</span> Add Assignment
+      </button>
+    `);
+  }
+
+  const TIME_SLOTS = [
+    'Mon: 7:00-9:00',   'Mon: 9:00-11:00',   'Mon: 11:00-13:00',
+    'Mon: 13:00-15:00', 'Mon: 15:00-17:00',   'Mon: 17:00-19:00',
+    'Tue: 7:00-9:00',   'Tue: 9:00-11:00',   'Tue: 11:00-13:00',
+    'Tue: 13:00-15:00', 'Tue: 15:00-17:00',   'Tue: 17:00-19:00',
+    'Wed: 7:00-9:00',   'Wed: 9:00-11:00',   'Wed: 11:00-13:00',
+    'Wed: 13:00-15:00', 'Wed: 15:00-17:00',   'Wed: 17:00-19:00',
+    'Thu: 7:00-9:00',   'Thu: 9:00-11:00',   'Thu: 11:00-13:00',
+    'Thu: 13:00-15:00', 'Thu: 15:00-17:00',   'Thu: 17:00-19:00',
+    'Fri: 7:00-9:00',   'Fri: 9:00-11:00',   'Fri: 11:00-13:00',
+    'Fri: 13:00-15:00', 'Fri: 15:00-17:00',   'Fri: 17:00-19:00',
+    'Sat: 7:00-9:00',   'Sat: 9:00-11:00',   'Sat: 11:00-13:00',
+    'Sat: 13:00-15:00', 'Sat: 15:00-17:00',   'Sat: 17:00-19:00',
+  ];
+
+  function buildSlotOptions(selected) {
+    return TIME_SLOTS.map(s =>
+      `<option value="${escapeAttr(s)}" ${selected === s ? 'selected' : ''}>${escapeHTML(s)}</option>`
+    ).join('');
+  }
+
+  function buildRoomOptions(selected) {
+    const rooms = [...runtimeLectureRooms, ...runtimeLabRooms];
+    const opts = rooms.map(r =>
+      `<option value="${escapeAttr(r)}" ${selected === r ? 'selected' : ''}>${escapeHTML(r)}</option>`
+    ).join('');
+    return `<option value="">— Room —</option>${opts}`;
+  }
+
+  function buildSubjectOptions(selected) {
+    const subjects = getSubjectsFromTable().filter(s => s.name);
+    const opts = subjects.map(s =>
+      `<option value="${escapeAttr(s.name)}" ${selected === s.name ? 'selected' : ''}>${escapeHTML(s.name)}</option>`
+    ).join('');
+    return `<option value="">— Subject —</option>${opts}`;
+  }
+
+  function addAssignmentRow(item = {}) {
+    const list = document.getElementById('editAssignmentList');
+    if (!list) return;
+    const row = document.createElement('div');
+    row.className = 'modal-assign-row';
+    row.innerHTML = `
+      <select class="edit-assign-subject">${buildSubjectOptions(item.subject || '')}</select>
+      <select class="edit-assign-slot">${buildSlotOptions(item.slot || '')}</select>
+      <select class="edit-assign-room">${buildRoomOptions(item.room || '')}</select>
+      <button type="button" class="modal-assign-delete" title="Remove">&times;</button>
+    `;
+    row.querySelector('.modal-assign-delete').addEventListener('click', () => row.remove());
+    list.appendChild(row);
+  }
+
   function openModal(facultyName) {
     const rows = Array.from(document.querySelectorAll('#facultyTable tbody tr'));
     const row  = rows.find(r => r.querySelector('input[type="text"]')?.value.trim() === facultyName);
     const currentUnits = row ? (parseInt(row.querySelector('input[type="number"]')?.value, 10) || 24) : 24;
-    nameInput.value   = facultyName;
-    unitsInput.value  = currentUnits;
+
+    nameInput.value  = facultyName;
+    unitsInput.value = currentUnits;
     if (titleEl) titleEl.textContent = `Edit — ${facultyName}`;
+
+    // Populate assignment list from lastGAResult
+    const list = document.getElementById('editAssignmentList');
+    if (list) {
+      list.innerHTML = '';
+      const assignments = lastGAResult.filter(item => item.faculty === facultyName);
+      assignments.forEach(item => addAssignmentRow(item));
+    }
+
     modal.classList.add('open');
     modal.removeAttribute('aria-hidden');
     unitsInput.focus();
@@ -1130,6 +1254,8 @@ function initEditFacultyModal() {
     openModal(btn.dataset.faculty);
   });
 
+  document.getElementById('editAddAssignment')?.addEventListener('click', () => addAssignmentRow());
+
   if (closeBtn)  closeBtn.addEventListener('click',  closeModal);
   if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
   modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
@@ -1141,14 +1267,69 @@ function initEditFacultyModal() {
       const newUnits = parseInt(unitsInput.value, 10);
       if (!name || isNaN(newUnits) || newUnits < 0) return;
 
+      // 1. Update max units in faculty table
       const rows = Array.from(document.querySelectorAll('#facultyTable tbody tr'));
       const row  = rows.find(r => r.querySelector('input[type="text"]')?.value.trim() === name);
       if (row) {
         const numInput = row.querySelector('input[type="number"]');
         if (numInput) { numInput.value = newUnits; saveFaculty(); }
       }
+
+      // 2. Apply edited assignments back to lastGAResult
+      const assignRows = document.querySelectorAll('#editAssignmentList .modal-assign-row');
+      if (assignRows.length) {
+        // Remove all current assignments for this faculty
+        lastGAResult = lastGAResult.filter(item => item.faculty !== name);
+
+        // Add updated ones
+        assignRows.forEach(r => {
+          const subject = r.querySelector('.edit-assign-subject')?.value || '';
+          const slot    = r.querySelector('.edit-assign-slot')?.value   || '';
+          const room    = r.querySelector('.edit-assign-room')?.value   || '';
+          if (!subject || !slot) return;
+
+          // Find original item data to preserve type/section/year/class_type
+          const subjectData = getSubjectsFromTable().find(s => s.name === subject) || {};
+          const daySlotMatch = slot.match(/^(\w+):\s*(\d+):00-(\d+):00/);
+          const slotDisplay = daySlotMatch
+            ? `${DAY_MAP[daySlotMatch[1]] || daySlotMatch[1]}: ${
+                parseInt(daySlotMatch[2]) >= 12
+                  ? `${parseInt(daySlotMatch[2]) - 12 || 12}:00 PM`
+                  : `${parseInt(daySlotMatch[2])}:00 AM`
+              } – ${
+                parseInt(daySlotMatch[3]) >= 12
+                  ? `${parseInt(daySlotMatch[3]) - 12 || 12}:00 PM`
+                  : `${parseInt(daySlotMatch[3])}:00 AM`
+              }`
+            : slot;
+
+          lastGAResult.push({
+            faculty:      name,
+            subject,
+            slot,
+            slot_display: slotDisplay,
+            room,
+            type:         subjectData.type || '',
+            year:         subjectData.year || '',
+            semester:     subjectData.semester || '',
+            class_type:   room && LABORATORY_ROOMS.includes(room) ? 'LAB' : 'LECTURE',
+            section:      ''
+          });
+        });
+
+        // Re-render all panels
+        try { localStorage.setItem('lastGAResult', JSON.stringify(lastGAResult)); } catch(e) {}
+        const displayResult = filterResultBySemester(lastGAResult);
+        renderTable(displayResult);
+        updateCharts(displayResult);
+        computeFairnessReport(displayResult);
+        renderDashboardAssignments(displayResult);
+        renderTimetable(displayResult);
+        updateReportsPanel(displayResult);
+      }
+
       closeModal();
-      showToast(`${name} — max units updated to ${newUnits}.`);
+      showToast(`${name} — updated successfully.`, 'success');
     });
   }
 }

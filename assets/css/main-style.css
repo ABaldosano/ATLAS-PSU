@@ -1443,44 +1443,136 @@ td {
 }
 
 /* ============================================================
-   21. REPORTS SUMMARY TABLE - grouped rows
+   21. REPORTS SUMMARY — card-per-faculty layout
    ============================================================ */
-.faculty-name-cell {
-  font-weight: 600;
-  vertical-align: top !important;
-  padding-top: var(--space-4) !important;
-  white-space: nowrap;
+
+/* Outer wrapper replaces the old flat table */
+.summary-faculty-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
 }
 
-.faculty-name-inner {
+/* One card per faculty member */
+.summary-faculty-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+  transition: box-shadow var(--transition-base);
+}
+.summary-faculty-card:hover { box-shadow: var(--shadow-md); }
+
+/* Card header: avatar + name/count + units badge + edit button */
+.summary-fac-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: var(--bg-surface-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.summary-fac-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--clr-primary-100);
+  color: var(--clr-primary-700);
+  font-size: 0.875rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: -0.01em;
+}
+
+.summary-fac-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.summary-fac-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.summary-fac-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.summary-fac-actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-shrink: 0;
 }
 
-.subject-slot-cell { padding: 0.4375rem 0.875rem; }
+/* Assignments table inside card */
+.summary-assignments-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.845rem;
+}
 
-.subj-name-text {
-  font-size: 0.875rem;
+.summary-assignments-table thead th {
+  padding: 0.5rem 1rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+}
+
+.summary-assignments-table thead th:last-child { text-align: right; }
+
+.summary-assignments-table tbody td {
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.summary-assignments-table tbody tr:last-child td { border-bottom: none; }
+
+.summary-assignments-table tbody tr:hover { background: var(--bg-surface-2); }
+
+.summary-subj-name {
+  font-weight: 600;
   color: var(--text-primary);
+  font-size: 0.85rem;
 }
 
-.total-units-cell {
-  text-align: center;
-  vertical-align: top !important;
-  padding-top: var(--space-3) !important;
+.summary-slot-room {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: 3px;
 }
 
-.actions-cell {
-  vertical-align: top !important;
-  padding-top: var(--space-3) !important;
+.summary-td-right {
+  text-align: right;
   white-space: nowrap;
 }
 
-/* Row separator between faculty groups */
-.summary-row:first-of-type td {
-  border-top: 2px solid var(--border-default);
-}
+/* Legacy compat - hidden but don't break old table if still rendered */
+.faculty-name-cell { font-weight: 600; vertical-align: top !important; padding-top: var(--space-4) !important; white-space: nowrap; }
+.faculty-name-inner { display: flex; align-items: center; gap: var(--space-2); }
+.subject-slot-cell { padding: 0.4375rem 0.875rem; }
+.subj-name-text { font-size: 0.875rem; color: var(--text-primary); }
+.total-units-cell { text-align: center; vertical-align: top !important; padding-top: var(--space-3) !important; }
+.actions-cell { vertical-align: top !important; padding-top: var(--space-3) !important; white-space: nowrap; }
+.summary-row:first-of-type td { border-top: 2px solid var(--border-default); }
 
 /* ============================================================
    22. SLOT BADGES (day-colored pills)
@@ -1595,7 +1687,7 @@ td {
 }
 
 /* ============================================================
-   24. EDIT MODAL
+   24. EDIT MODAL — expanded for full faculty editing
    ============================================================ */
 .modal-overlay {
   position: fixed;
@@ -1623,13 +1715,16 @@ td {
   box-shadow: var(--shadow-xl);
   border: 1px solid var(--border-subtle);
   width: 100%;
-  max-width: 440px;
+  max-width: 680px;
+  max-height: 90vh;
   margin: 0 var(--space-5);
   transform: translateY(-12px) scale(0.98);
   transition:
     transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
     opacity 0.18s ease;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-overlay.open .modal-card {
@@ -1643,6 +1738,7 @@ td {
   padding: var(--space-5) var(--space-6) var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-surface-2);
+  flex-shrink: 0;
 }
 
 .modal-label {
@@ -1682,6 +1778,8 @@ td {
 
 .modal-body {
   padding: var(--space-5) var(--space-6);
+  overflow-y: auto;
+  flex: 1;
 }
 
 .modal-form-group {
@@ -1765,12 +1863,131 @@ td {
   padding: var(--space-4) var(--space-6);
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-surface-2);
+  flex-shrink: 0;
 }
 
 .modal-footer button {
   min-width: 100px;
   padding: 0.5625rem 1.25rem;
   font-size: 0.875rem;
+}
+
+/* Modal section divider */
+.modal-section-divider {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: var(--space-5) 0 var(--space-4);
+}
+
+.modal-section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
+}
+
+/* Assignment editor rows inside modal */
+.modal-assignment-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.modal-assignment-list::-webkit-scrollbar { width: 4px; }
+.modal-assignment-list::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 4px; }
+
+.modal-assign-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-3);
+}
+
+.modal-assign-row select,
+.modal-assign-row input[type="text"] {
+  width: 100%;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  border: 1.5px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.modal-assign-row select:focus,
+.modal-assign-row input[type="text"]:focus {
+  border-color: var(--clr-primary-500);
+}
+
+.modal-assign-delete {
+  background: none;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.modal-assign-delete:hover {
+  background: var(--clr-danger-100);
+  color: var(--clr-danger-500);
+  border-color: var(--clr-danger-500);
+}
+
+.modal-add-assignment-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: 0.4rem 0.875rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: none;
+  border: 1.5px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 100%;
+  justify-content: center;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+
+.modal-add-assignment-btn:hover {
+  border-color: var(--clr-primary-400);
+  color: var(--clr-primary-600);
+  background: var(--clr-primary-50);
+}
+
+/* Two-col grid for units + modal inline fields */
+.modal-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 560px) {
+  .modal-assign-row { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; }
+  .modal-assign-delete { grid-column: 2; grid-row: 2; justify-self: end; }
+  .modal-grid-2 { grid-template-columns: 1fr; }
+  .modal-card { max-width: calc(100vw - 2rem); }
 }
 
 /* ============================================================
