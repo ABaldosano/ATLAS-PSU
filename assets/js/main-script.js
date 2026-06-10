@@ -75,6 +75,31 @@ const LABORATORY_ROOMS = ['MTC1','MTC2','IT101','NIT1','NIT3'];
 
 const ALL_ROOMS = [...LECTURE_ROOMS, ...LABORATORY_ROOMS];
 
+// Room capacity defaults — mirrors backend config/settings.py ROOM_CAPACITY
+const DEFAULT_ROOM_CAPACITY = {
+  'CL1':       { recommended: 35, max: 52 },
+  'CL2':       { recommended: 35, max: 52 },
+  'CL3':       { recommended: 35, max: 52 },
+  'IT Room 1': { recommended: 45, max: 60 },
+  'IT Room 2': { recommended: 45, max: 60 },
+  'IT Room 3': { recommended: 45, max: 60 },
+  'GA Bldg 16':{ recommended: 40, max: 55 },
+  'GA Bldg 17':{ recommended: 40, max: 55 },
+  'GA Bldg 18':{ recommended: 40, max: 55 },
+  'GA Bldg 19':{ recommended: 40, max: 55 },
+  'GA Bldg 20':{ recommended: 40, max: 55 },
+  'GA Bldg 21':{ recommended: 40, max: 55 },
+  'GA Bldg 22':{ recommended: 40, max: 55 },
+  'GA Bldg 23':{ recommended: 40, max: 55 },
+  'GA Bldg 24':{ recommended: 40, max: 55 },
+  'GA Bldg 25':{ recommended: 40, max: 55 },
+  'MTC1':      { recommended: 32, max: 45 },
+  'MTC2':      { recommended: 32, max: 45 },
+  'IT101':     { recommended: 30, max: 40 },
+  'NIT1':      { recommended: 40, max: 45 },
+  'NIT3':      { recommended: 40, max: 45 },
+};
+
 // Class size data - editable via UI in future phases; loaded from defaults on first startup
 const DEFAULT_CLASS_SIZES = {
   IT1B1: { year: '1st Year', block: 'B1', size: 54 },
@@ -417,6 +442,83 @@ function updateDashboardStats(counts) {
 }
 
 /* ============================================================
+   5b-2. CAPACITY METRICS DASHBOARD CARD
+   ============================================================ */
+function renderCapacityMetrics(capacityMetrics) {
+  const card = document.getElementById('capacitySummaryCard');
+  if (!card) return;
+
+  card.style.display = '';
+
+  if (!capacityMetrics) capacityMetrics = {};
+
+  card.style.display = '';
+
+  const total  = capacityMetrics.total_evaluated || 0;
+  const okCnt  = capacityMetrics.within_recommended_count || 0;
+  const warnCt = capacityMetrics.over_recommended_count   || 0;
+  const hardCt = capacityMetrics.hard_violation_count     || 0;
+
+  const pct = n => total > 0 ? ((n / total) * 100).toFixed(1) + '%' : '–';
+
+  document.getElementById('capMetricTotal').textContent   = total;
+  document.getElementById('capMetricOk').textContent      = okCnt;
+  document.getElementById('capMetricOkPct').textContent   = pct(okCnt);
+  document.getElementById('capMetricWarn').textContent    = warnCt;
+  document.getElementById('capMetricWarnPct').textContent = pct(warnCt);
+  document.getElementById('capMetricHard').textContent    = hardCt;
+  document.getElementById('capMetricHardPct').textContent = pct(hardCt);
+
+  // Populate persistent dashboard capacity stat row
+  const dashRow = document.getElementById('dashCapStatsRow');
+  if (dashRow) {
+    const setD = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setD('dashCapOk',      okCnt);
+    setD('dashCapOkPct',   pct(okCnt) + ' compliant');
+    setD('dashCapWarn',    warnCt);
+    setD('dashCapWarnPct', pct(warnCt) + ' of assignments');
+    setD('dashCapHard',    hardCt);
+    setD('dashCapHardPct', hardCt > 0 ? pct(hardCt) + ' of assignments' : 'none detected');
+  }
+
+  // Overall status badge
+  const badge = document.getElementById('capacityOverallBadge');
+  if (badge) {
+    if (hardCt > 0) {
+      badge.textContent = `${hardCt} Hard Violation${hardCt > 1 ? 's' : ''}`;
+      badge.className = 'capacity-overall-badge badge-hard';
+    } else if (warnCt > 0) {
+      badge.textContent = `${warnCt} Over Recommended`;
+      badge.className = 'capacity-overall-badge badge-warn';
+    } else {
+      badge.textContent = 'All Rooms Within Capacity';
+      badge.className = 'capacity-overall-badge badge-ok';
+    }
+  }
+
+  // Hard violations detail list
+  const violList = document.getElementById('capacityHardViolationsList');
+  const violItems = document.getElementById('capacityHardViolationsItems');
+  const violations = capacityMetrics.hard_violations || [];
+  if (violList && violItems) {
+    if (violations.length > 0) {
+      violList.style.display = '';
+      violItems.innerHTML = violations.map(v => `
+        <div class="capacity-violation-row">
+          <span class="viol-room">${escapeHTML(v.room || '?')}</span>
+          <span class="viol-detail">
+            ${escapeHTML(v.subject || '')} · ${escapeHTML(v.section || '')}
+            <span class="viol-counts">${v.student_count} students / max ${v.max_cap} (+${v.excess})</span>
+          </span>
+        </div>
+      `).join('');
+    } else {
+      violList.style.display = 'none';
+    }
+  }
+}
+
+/* ============================================================
    5c. TIMETABLE RENDER
    ============================================================ */
 function renderTimetable(data) {
@@ -542,6 +644,8 @@ function updateReportsPanel(data) {
       const sectionTag  = item.section
         ? `<span class="section-badge">${escapeHTML(item.section)}</span>`
         : (item.year ? `<span class="subject-year-badge">${escapeHTML(item.year.replace(' Year','Y'))}</span>` : '');
+      const stuTag  = item.student_count > 0 ? `<span class="student-count-tag">${item.student_count}</span>` : '';
+      const capBadge = buildCapacityBadge(item);
 
       return `
         <tr>
@@ -551,7 +655,11 @@ function updateReportsPanel(data) {
             ${sectionTag}
           </td>
           <td>${displaySlot ? `<span class="slot-badge slot-${escapeHTML(day)}">${escapeHTML(displaySlot)}</span>` : '<span class="text-muted">—</span>'}</td>
-          <td>${item.room ? `<span class="room-badge">${escapeHTML(item.room)}</span>` : '<span class="text-muted">—</span>'}</td>
+          <td>
+            ${item.room ? `<span class="room-badge">${escapeHTML(item.room)}</span>` : '<span class="text-muted">—</span>'}
+            ${stuTag}
+            ${capBadge}
+          </td>
         </tr>`;
     }).join('');
 
@@ -760,6 +868,8 @@ function renderTable(data) {
       <td><span class="class-type-tag ${(item.class_type||'LECTURE').toLowerCase()}">${escapeHTML(item.class_type || 'LECTURE')}</span></td>
       <td>${escapeHTML(displaySlot)}</td>
       <td>${item.room ? `<span class="room-badge"> ${escapeHTML(item.room)}</span>` : '<span class="text-muted">N/A</span>'}</td>
+      <td>${item.student_count > 0 ? `<span class="student-count-tag">${item.student_count}</span>` : '<span class="text-muted">—</span>'}</td>
+      <td>${buildCapacityBadge(item)}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -865,6 +975,7 @@ async function triggerGARunAPI() {
     crossover:        Number(crossover),
     soft_constraints: softConstraints,
     active_semester:  mode ? mode.semester : null,
+    class_sizes:      getClassSizes(),
   };
 
   const response = await fetch(`${API_BASE}/run-ga`, {
@@ -928,6 +1039,9 @@ function initRunGA() {
             runBtn.disabled = false;
 
             lastGAResult = status.result || [];
+            if (status.analytics && status.analytics.capacity_metrics) {
+              mergeCapacityStatuses(status.analytics);
+            }
             const displayResult = filterResultBySemester(lastGAResult);
             renderTable(displayResult);
             updateCharts(displayResult);
@@ -939,7 +1053,12 @@ function initRunGA() {
 
             // Store analytics from backend if available
             if (status.analytics && Object.keys(status.analytics).length > 0) {
-              try { window.__atlasAnalytics = status.analytics; } catch(e) {}
+              try {
+                window.__atlasAnalytics = status.analytics;
+                renderCapacityMetrics(resolveCapacityMetrics(status.analytics));
+                renderCapacityAnalytics(status.analytics);
+                localStorage.setItem('atlasAnalyticsCache', JSON.stringify(status.analytics));
+              } catch(e) { console.warn('Analytics render error:', e); }
             }
             // Display backend warnings
             if (status.warnings && status.warnings.length > 0) {
@@ -1582,6 +1701,8 @@ function renderDashboardAssignments(data) {
       const sectionHTML = item.section
         ? `<span class="section-badge fac-assign-section">${escapeHTML(item.section)}</span>`
         : '';
+      const stuTag   = item.student_count > 0 ? `<span class="student-count-tag">${item.student_count}</span>` : '';
+      const capBadge = buildCapacityBadge(item);
       return `
         <li class="fac-assign-item-full">
           <span class="fac-assign-ct-dot ct-dot-${ctClass}"></span>
@@ -1592,6 +1713,8 @@ function renderDashboardAssignments(data) {
               ${sectionHTML}
               ${displaySlot ? `<span class="fac-assign-slot slot-day-${escapeHTML(dayAbbr)}">${escapeHTML(displaySlot)}</span>` : ''}
               ${item.room ? `<span class="fac-assign-room">${escapeHTML(item.room)}</span>` : ''}
+              ${stuTag}
+              ${capBadge}
             </span>
           </span>
         </li>`;
@@ -2194,6 +2317,18 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }
   } catch(e) { lastGAResult = []; }
+
+  // Restore analytics cache and re-populate capacity panels
+  try {
+    const savedAnalytics = localStorage.getItem('atlasAnalyticsCache');
+    if (savedAnalytics) {
+      const analytics = JSON.parse(savedAnalytics);
+      window.__atlasAnalytics = analytics;
+      mergeCapacityStatuses(analytics);
+      renderCapacityMetrics(resolveCapacityMetrics(analytics));
+      renderCapacityAnalytics(analytics);
+    }
+  } catch(e) {}
 });
 
 function getActiveSemester() {
@@ -2343,6 +2478,7 @@ const DEFAULT_LABORATORY_ROOMS = [...LABORATORY_ROOMS];
 
 let runtimeLectureRooms = [...LECTURE_ROOMS];
 let runtimeLabRooms = [...LABORATORY_ROOMS];
+let runtimeRoomCapacity = { ...DEFAULT_ROOM_CAPACITY };
 
 function loadRoomsFromStorage() {
   try {
@@ -2355,7 +2491,8 @@ function saveRoomsToStorage() {
   try {
     localStorage.setItem('roomsData', JSON.stringify({
       lecture: runtimeLectureRooms,
-      lab: runtimeLabRooms
+      lab: runtimeLabRooms,
+      capacity: runtimeRoomCapacity
     }));
   } catch (e) { console.warn('Rooms save failed:', e); }
 }
@@ -2365,18 +2502,48 @@ function renderRoomList(containerId, rooms) {
   if (!container) return;
   container.innerHTML = '';
   rooms.forEach((room, idx) => {
+    const cap = runtimeRoomCapacity[room] || { recommended: '', max: '' };
     const item = document.createElement('div');
     item.className = 'room-item';
     item.innerHTML = `
-      <input type="text" value="${escapeAttr(room)}" placeholder="Room name" style="flex:1;">
+      <input type="text" value="${escapeAttr(room)}" placeholder="Room name" class="room-name-input" style="flex:2;min-width:0;">
+      <input type="number" value="${cap.recommended !== '' ? cap.recommended : ''}" placeholder="Rec." class="room-cap-input room-rec-input" min="1" max="999" title="Recommended capacity">
+      <input type="number" value="${cap.max !== '' ? cap.max : ''}" placeholder="Max" class="room-cap-input room-max-input" min="1" max="999" title="Hard max capacity">
       <button class="room-item-del" data-idx="${idx}" title="Delete">&times;</button>
     `;
-    item.querySelector('input').addEventListener('input', debounce(() => {
-      const list = containerId === 'lectureRoomsList' ? runtimeLectureRooms : runtimeLabRooms;
-      list[idx] = item.querySelector('input').value.trim();
+    const nameInp = item.querySelector('.room-name-input');
+    const recInp  = item.querySelector('.room-rec-input');
+    const maxInp  = item.querySelector('.room-max-input');
+    const isList  = containerId === 'lectureRoomsList';
+    const list    = isList ? runtimeLectureRooms : runtimeLabRooms;
+
+    nameInp.addEventListener('input', debounce(() => {
+      const oldName = list[idx];
+      const newName = nameInp.value.trim();
+      // Migrate capacity key if name changed
+      if (oldName !== newName) {
+        if (runtimeRoomCapacity[oldName] !== undefined) {
+          runtimeRoomCapacity[newName] = runtimeRoomCapacity[oldName];
+          delete runtimeRoomCapacity[oldName];
+        }
+      }
+      list[idx] = newName;
     }, 300));
+
+    recInp.addEventListener('input', debounce(() => {
+      const name = list[idx] || nameInp.value.trim();
+      if (!runtimeRoomCapacity[name]) runtimeRoomCapacity[name] = {};
+      runtimeRoomCapacity[name].recommended = parseInt(recInp.value) || '';
+    }, 300));
+
+    maxInp.addEventListener('input', debounce(() => {
+      const name = list[idx] || nameInp.value.trim();
+      if (!runtimeRoomCapacity[name]) runtimeRoomCapacity[name] = {};
+      runtimeRoomCapacity[name].max = parseInt(maxInp.value) || '';
+    }, 300));
+
     item.querySelector('.room-item-del').addEventListener('click', () => {
-      if (containerId === 'lectureRoomsList') {
+      if (isList) {
         runtimeLectureRooms.splice(idx, 1);
         renderRoomList('lectureRoomsList', runtimeLectureRooms);
       } else {
@@ -2393,6 +2560,7 @@ function initRoomManagement() {
   if (stored) {
     runtimeLectureRooms = stored.lecture || [...LECTURE_ROOMS];
     runtimeLabRooms = stored.lab || [...LABORATORY_ROOMS];
+    runtimeRoomCapacity = stored.capacity || { ...DEFAULT_ROOM_CAPACITY };
   }
 
   renderRoomList('lectureRoomsList', runtimeLectureRooms);
@@ -2409,24 +2577,35 @@ function initRoomManagement() {
   });
 
   document.getElementById('saveRooms')?.addEventListener('click', async () => {
-    // Sync from DOM inputs
-    document.querySelectorAll('#lectureRoomsList .room-item input').forEach((inp, i) => {
-      runtimeLectureRooms[i] = inp.value.trim();
+    // Sync name+capacity from DOM inputs before saving
+    document.querySelectorAll('#lectureRoomsList .room-item').forEach((item, i) => {
+      const name = item.querySelector('.room-name-input')?.value.trim() || '';
+      const rec  = parseInt(item.querySelector('.room-rec-input')?.value) || '';
+      const max  = parseInt(item.querySelector('.room-max-input')?.value) || '';
+      runtimeLectureRooms[i] = name;
+      if (name) runtimeRoomCapacity[name] = { recommended: rec, max };
     });
-    document.querySelectorAll('#labRoomsList .room-item input').forEach((inp, i) => {
-      runtimeLabRooms[i] = inp.value.trim();
+    document.querySelectorAll('#labRoomsList .room-item').forEach((item, i) => {
+      const name = item.querySelector('.room-name-input')?.value.trim() || '';
+      const rec  = parseInt(item.querySelector('.room-rec-input')?.value) || '';
+      const max  = parseInt(item.querySelector('.room-max-input')?.value) || '';
+      runtimeLabRooms[i] = name;
+      if (name) runtimeRoomCapacity[name] = { recommended: rec, max };
     });
     runtimeLectureRooms = runtimeLectureRooms.filter(r => r);
     runtimeLabRooms = runtimeLabRooms.filter(r => r);
     saveRoomsToStorage();
-    // Also populate the soft constraint room dropdown
     populateSCRoomDropdown();
     showToast('Rooms saved successfully.', 'success');
     try {
       await fetch(`${API_BASE}/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lecture_rooms: runtimeLectureRooms, laboratory_rooms: runtimeLabRooms })
+        body: JSON.stringify({
+          lecture_rooms: runtimeLectureRooms,
+          laboratory_rooms: runtimeLabRooms,
+          room_capacity: runtimeRoomCapacity
+        })
       });
     } catch (e) { /* backend optional sync */ }
   });
@@ -2434,6 +2613,7 @@ function initRoomManagement() {
   document.getElementById('resetRooms')?.addEventListener('click', () => {
     runtimeLectureRooms = [...DEFAULT_LECTURE_ROOMS];
     runtimeLabRooms = [...DEFAULT_LABORATORY_ROOMS];
+    runtimeRoomCapacity = { ...DEFAULT_ROOM_CAPACITY };
     renderRoomList('lectureRoomsList', runtimeLectureRooms);
     renderRoomList('labRoomsList', runtimeLabRooms);
     saveRoomsToStorage();
@@ -2676,6 +2856,179 @@ function initSoftConstraints() {
     document.getElementById('softConstraintForm')?.classList.add('hidden');
     showToast(`Preferences cleared for ${name}.`, 'info');
   });
+}
+
+/* ============================================================
+   GLOBAL EXPORTS & TOAST UTILITY
+   ============================================================ */
+/* ============================================================
+   CAPACITY BADGE HELPER & ANALYTICS PANEL RENDERER
+   ============================================================ */
+
+function buildCapacityBadge(item) {
+  const status = item._cap_status || item.capacity_status || null;
+  if (status === 'hard_violation')   return `<span class="capacity-overall-badge badge-hard" title="Exceeds max capacity">Violation</span>`;
+  if (status === 'over_recommended') return `<span class="capacity-overall-badge badge-warn" title="Exceeds recommended">Over Cap</span>`;
+  if (status === 'ok')               return `<span class="capacity-overall-badge badge-ok"   title="Within recommended">OK</span>`;
+  return '';
+}
+
+function mergeCapacityStatuses(analytics) {
+  if (!analytics || !analytics.capacity_metrics) return;
+  const details = analytics.capacity_metrics.capacity_details || [];
+  if (!details.length || !lastGAResult.length) return;
+  const lookup = {};
+  details.forEach(d => {
+    const key = `${d.room}||${d.section}||${d.subject}`;
+    lookup[key] = { status: d.status, student_count: d.student_count };
+  });
+  lastGAResult.forEach(item => {
+    const key = `${item.room || ''}||${item.section || ''}||${item.subject || ''}`;
+    const match = lookup[key];
+    if (match) {
+      item._cap_status = match.status;
+      if (!item.student_count) item.student_count = match.student_count;
+    }
+  });
+}
+
+/* ============================================================
+   FRONTEND CAPACITY COMPUTATION
+   Used when backend analytics have no student_count data (total_evaluated === 0).
+   Derives capacity status from getClassSizes() + runtimeRoomCapacity.
+   ============================================================ */
+function computeCapacityMetricsFrontend(data) {
+  if (!data || !data.length) return null;
+  const classSizes = getClassSizes();
+  let within = 0, over = 0, hard = 0, evaluated = 0;
+  const hardViolations = [];
+  const details = [];
+
+  data.forEach(item => {
+    if (!item.room || item.room === 'Unassigned') return;
+    const section = item.section || '';
+    const sizeEntry = classSizes[section];
+    let studentCount = item.student_count > 0
+      ? item.student_count
+      : (sizeEntry ? (sizeEntry.size || 0) : 0);
+    if (studentCount <= 0 && item.year) {
+      const yearSizes = Object.values(classSizes)
+        .filter(v => v && v.year === item.year && (v.size || 0) > 0)
+        .map(v => v.size);
+      if (yearSizes.length) studentCount = Math.max(...yearSizes);
+    }
+    if (studentCount <= 0) return;
+
+    const cap = runtimeRoomCapacity[item.room] || {};
+    const recommended = (cap.recommended && cap.recommended !== '') ? Number(cap.recommended) : 9999;
+    const maxCap      = (cap.max        && cap.max        !== '') ? Number(cap.max)        : 9999;
+
+    evaluated++;
+    let status = 'ok';
+    if (studentCount > maxCap) {
+      status = 'hard_violation';
+      hard++;
+      hardViolations.push({ room: item.room, section, subject: item.subject || '',
+        student_count: studentCount, max_cap: maxCap, excess: studentCount - maxCap });
+    } else if (studentCount > recommended) {
+      status = 'over_recommended';
+      over++;
+    } else {
+      within++;
+    }
+
+    // Stamp back so badges render in table/assignment views
+    item._cap_status = status;
+    if (!item.student_count) item.student_count = studentCount;
+
+    details.push({ room: item.room, section, subject: item.subject || '',
+      student_count: studentCount, recommended_cap: recommended,
+      max_cap: maxCap, status, capacity_penalty: 0 });
+  });
+
+  if (evaluated === 0) return null;
+
+  return {
+    within_recommended_count: within,
+    over_recommended_count:   over,
+    hard_violation_count:     hard,
+    total_evaluated:          evaluated,
+    within_recommended_pct:   Math.round(within / evaluated * 1000) / 10,
+    total_capacity_penalty:   0,
+    hard_violations:          hardViolations,
+    capacity_details:         details,
+  };
+}
+
+/**
+ * Get best available capacity metrics:
+ * Use backend data if it has evaluated assignments, else compute from frontend.
+ */
+function resolveCapacityMetrics(backendAnalytics) {
+  const beCm = backendAnalytics && backendAnalytics.capacity_metrics;
+  if (beCm && beCm.total_evaluated > 0) return beCm;
+  const displayResult = filterResultBySemester(lastGAResult);
+  return computeCapacityMetricsFrontend(displayResult) || beCm || {};
+}
+
+function renderCapacityAnalytics(analytics) {
+  const cm = resolveCapacityMetrics(analytics);
+
+  const total  = cm.total_evaluated          || 0;
+  const okCnt  = cm.within_recommended_count || 0;
+  const warnCt = cm.over_recommended_count   || 0;
+  const hardCt = cm.hard_violation_count     || 0;
+  const pct = n => total > 0 ? ((n / total) * 100).toFixed(1) + '%' : '–';
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('analyticsCapTotal',          total  != null ? total  : '–');
+  set('analyticsCapCompliant',      okCnt  != null ? okCnt  : '–');
+  set('analyticsCapCompliantPct',   pct(okCnt));
+  set('analyticsCapOver',           warnCt != null ? warnCt : '–');
+  set('analyticsCapOverPct',        pct(warnCt));
+  set('analyticsCapViolations',     hardCt != null ? hardCt : '–');
+  set('analyticsCapViolationsPct',  pct(hardCt));
+
+  // Room utilization table
+  const ruBody = document.getElementById('roomUtilCapBody');
+  if (ruBody && analytics.room_utilization && analytics.room_utilization.length) {
+    ruBody.innerHTML = analytics.room_utilization.map(r => {
+      const recCap = r.recommended_cap != null ? r.recommended_cap : 'N/A';
+      const maxCap = r.max_cap         != null ? r.max_cap         : 'N/A';
+      const cls    = r.occupancy_pct >= 80 ? 'match-no' : r.occupancy_pct >= 50 ? 'match-partial' : 'match-yes';
+      return `<tr>
+        <td><span class="room-badge">${escapeHTML(r.room)}</span></td>
+        <td class="txt-center">${r.assigned_count}</td>
+        <td class="txt-center"><span class="${cls}">${r.occupancy_pct}%</span></td>
+        <td class="txt-center">${escapeHTML(String(recCap))}</td>
+        <td class="txt-center">${escapeHTML(String(maxCap))}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Capacity details table
+  const details = cm.capacity_details || [];
+  const cdBody = document.getElementById('capacityDetailsBody');
+  const cdSection = document.getElementById('capacityDetailsSection');
+  if (cdBody && details.length) {
+    cdBody.innerHTML = details.map(d => {
+      const utilPct = d.recommended_cap > 0 ? Math.round(d.student_count / d.recommended_cap * 100) : 0;
+      const utilCls = d.status === 'hard_violation' ? 'match-no' : d.status === 'over_recommended' ? 'match-partial' : 'match-yes';
+      const badgeCls   = d.status === 'hard_violation' ? 'badge-hard' : d.status === 'over_recommended' ? 'badge-warn' : 'badge-ok';
+      const badgeLabel = d.status === 'hard_violation' ? 'Violation' : d.status === 'over_recommended' ? 'Over Cap' : 'OK';
+      return `<tr>
+        <td><span class="room-badge">${escapeHTML(d.room)}</span></td>
+        <td>${d.section ? `<span class="section-badge">${escapeHTML(d.section)}</span>` : '<span class="text-muted">—</span>'}</td>
+        <td>${escapeHTML(d.subject || '')}</td>
+        <td class="txt-center"><span class="student-count-tag">${d.student_count}</span></td>
+        <td class="txt-center">${d.recommended_cap}</td>
+        <td class="txt-center">${d.max_cap}</td>
+        <td class="txt-center"><span class="${utilCls}">${utilPct}%</span></td>
+        <td><span class="capacity-overall-badge ${badgeCls}">${badgeLabel}</span></td>
+      </tr>`;
+    }).join('');
+    if (cdSection) cdSection.style.display = '';
+  }
 }
 
 /* ============================================================

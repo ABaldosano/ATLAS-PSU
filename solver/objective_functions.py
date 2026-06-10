@@ -5,17 +5,17 @@ Weights are configurable via config/settings.py GA_WEIGHTS.
 """
 
 from config.settings import GA_WEIGHTS, UNITS_PER_ASSIGNMENT
+from solver.constraints import room_capacity_score
 
 
-def score_preference(assignment: dict, soft_constraints: dict) -> float:
+def score_preference(assignment: dict, soft_constraints: dict,
+                     class_sizes: dict = None) -> float:
     """
     Compute soft-preference score for a single assignment.
     Positive = preference satisfied. Negative = preference violated.
+    Includes room capacity scoring.
     """
     sc = soft_constraints.get(assignment.get("faculty", ""), {})
-    if not sc:
-        return 0.0
-
     score = 0.0
     slot = assignment.get("slot", "")
     room = assignment.get("room", "")
@@ -32,47 +32,56 @@ def score_preference(assignment: dict, soft_constraints: dict) -> float:
 
     slot_day_str = slot.split(":")[0].strip() if slot else ""
 
-    # Period preference
-    preferred_period = sc.get("preferred_period")
-    if preferred_period and slot_start_hour >= 0:
-        hit = (
-            (preferred_period == "morning"   and 7  <= slot_start_hour < 12) or
-            (preferred_period == "afternoon" and 12 <= slot_start_hour < 17) or
-            (preferred_period == "evening"   and slot_start_hour >= 17)
-        )
-        score += w["preferred_period_match"] if hit else w["preferred_period_miss"]
+    if sc:
+        # Period preference
+        preferred_period = sc.get("preferred_period")
+        if preferred_period and slot_start_hour >= 0:
+            hit = (
+                (preferred_period == "morning"   and 7  <= slot_start_hour < 12) or
+                (preferred_period == "afternoon" and 12 <= slot_start_hour < 17) or
+                (preferred_period == "evening"   and slot_start_hour >= 17)
+            )
+            score += w["preferred_period_match"] if hit else w["preferred_period_miss"]
 
-    # Room preference
-    preferred_room = sc.get("preferred_room")
-    if preferred_room and room:
-        score += w["preferred_room_match"] if room == preferred_room else w["preferred_room_miss"]
+        # Room preference
+        preferred_room = sc.get("preferred_room")
+        if preferred_room and room:
+            score += w["preferred_room_match"] if room == preferred_room else w["preferred_room_miss"]
 
-    # Building preference
-    preferred_building = sc.get("preferred_building")
-    if preferred_building and room:
-        score += (w["preferred_building_match"] if preferred_building.lower() in room.lower()
-                  else w["preferred_building_miss"])
+        # Building preference
+        preferred_building = sc.get("preferred_building")
+        if preferred_building and room:
+            score += (w["preferred_building_match"] if preferred_building.lower() in room.lower()
+                      else w["preferred_building_miss"])
 
-    # Floor preference
-    preferred_floor = sc.get("preferred_floor")
-    if preferred_floor and room:
-        if str(preferred_floor).lower() in room.lower():
-            score += w["preferred_floor_match"]
+        # Floor preference
+        preferred_floor = sc.get("preferred_floor")
+        if preferred_floor and room:
+            if str(preferred_floor).lower() in room.lower():
+                score += w["preferred_floor_match"]
 
-    # Restricted days
-    restricted_days = sc.get("restricted_days", [])
-    if restricted_days and slot_day_str and slot_day_str in restricted_days:
-        score += w["restricted_day_penalty"]
+        # Restricted days
+        restricted_days = sc.get("restricted_days", [])
+        if restricted_days and slot_day_str and slot_day_str in restricted_days:
+            score += w["restricted_day_penalty"]
 
-    # Maternity/leave flag
-    if sc.get("maternity_leave"):
-        score += w["maternity_leave_penalty"]
+        # Maternity/leave flag
+        if sc.get("maternity_leave"):
+            score += w["maternity_leave_penalty"]
+
+    # Room capacity score (always applied when room and student count are known)
+    if room and room != "Unassigned" and class_sizes:
+        section_key = assignment.get("section", "")
+        size_entry = class_sizes.get(section_key)
+        student_count = size_entry.get("size", 0) if isinstance(size_entry, dict) else 0
+        if student_count > 0:
+            score += room_capacity_score(room, student_count)
 
     return score
 
 
 def schedule_fitness(assignments: list, faculty_list: list, soft_constraints: dict,
-                     static_lookup: dict) -> float:
+                     static_lookup: dict, class_sizes: dict = None) -> float:
     """
     Compute total fitness of a schedule.
     Used by GA to compare candidate improvements.
@@ -81,7 +90,9 @@ def schedule_fitness(assignments: list, faculty_list: list, soft_constraints: di
     fac_map = {f["name"]: f for f in faculty_list}
     w = GA_WEIGHTS
 
-    preference_score = sum(score_preference(a, soft_constraints) for a in assignments)
+    preference_score = sum(
+        score_preference(a, soft_constraints, class_sizes) for a in assignments
+    )
 
     # Specialization quality bonus
     spec_score = 0.0
@@ -120,7 +131,8 @@ def schedule_fitness(assignments: list, faculty_list: list, soft_constraints: di
 
 
 def compute_satisfaction_metrics(assignments: list, faculty_list: list,
-                                  soft_constraints: dict) -> dict:
+                                  soft_constraints: dict,
+                                  class_sizes: dict = None) -> dict:
     """
     Returns per-faculty and aggregate satisfaction metrics.
     """
@@ -141,7 +153,7 @@ def compute_satisfaction_metrics(assignments: list, faculty_list: list,
             faculty_satisfaction[fac_name] = {"satisfaction_pct": 100.0, "score": 0.0}
             continue
 
-        raw = sum(score_preference(a, {fac_name: sc}) for a in fac_assigns)
+        raw = sum(score_preference(a, {fac_name: sc}, class_sizes) for a in fac_assigns)
         # Max possible: every preference satisfied
         max_possible = len(fac_assigns) * (
             GA_WEIGHTS["preferred_period_match"] +

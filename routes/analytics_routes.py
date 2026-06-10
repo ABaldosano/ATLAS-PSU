@@ -40,6 +40,7 @@ def get_analytics():
             static_lookup,
             sc,
             p.get("metrics", {}),
+            class_sizes=_app.class_sizes_store,
         )
 
     return _ok(data=analytics, metrics=p.get("metrics", {}), warnings=p.get("warnings", []))

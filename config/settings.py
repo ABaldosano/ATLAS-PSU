@@ -18,6 +18,55 @@ LECTURE_ROOMS = [
 LABORATORY_ROOMS = ["MTC1", "MTC2", "IT101", "NIT1", "NIT3"]
 ALL_ROOMS = LECTURE_ROOMS + LABORATORY_ROOMS
 
+# ── Room Capacity Configuration ───────────────────────────────────────────────
+# Each room entry: {recommended, max, penalties: [(threshold, penalty_per_student), ...]}
+# Tiered Penalty Constraint: soft penalty when over recommended but under max;
+# Hard rejection when student_count > max.
+ROOM_CAPACITY = {
+    # CL1-CL3: Recommended 35, reject >52 (50% over as realistic hard max)
+    "CL1":      {"recommended": 35, "max": 52},
+    "CL2":      {"recommended": 35, "max": 52},
+    "CL3":      {"recommended": 35, "max": 52},
+
+    # IT Rooms: Recommended 45, reject >60
+    "IT Room 1": {"recommended": 45, "max": 60},
+    "IT Room 2": {"recommended": 45, "max": 60},
+    "IT Room 3": {"recommended": 45, "max": 60},
+
+    # GA Building Rooms: Recommended 40, reject >55
+    "GA Bldg 16": {"recommended": 40, "max": 55},
+    "GA Bldg 17": {"recommended": 40, "max": 55},
+    "GA Bldg 18": {"recommended": 40, "max": 55},
+    "GA Bldg 19": {"recommended": 40, "max": 55},
+    "GA Bldg 20": {"recommended": 40, "max": 55},
+    "GA Bldg 21": {"recommended": 40, "max": 55},
+    "GA Bldg 22": {"recommended": 40, "max": 55},
+    "GA Bldg 23": {"recommended": 40, "max": 55},
+    "GA Bldg 24": {"recommended": 40, "max": 55},
+    "GA Bldg 25": {"recommended": 40, "max": 55},
+
+    # MTC1-MTC2: Computer cubicle lab — hard max 45, reject >45
+    # Tiers: <=32 comfortable, 33-40 moderate penalty, 41-45 higher penalty
+    "MTC1": {"recommended": 32, "max": 45,
+              "tiers": [(33, 2.0), (41, 5.0)]},  # per-student penalty per tier start
+    "MTC2": {"recommended": 32, "max": 45,
+              "tiers": [(33, 2.0), (41, 5.0)]},
+
+    # IT101: Recommended 30, hard max 40
+    # Tiers: <=30 ok, 31-35 moderate, 36-40 higher penalty
+    "IT101": {"recommended": 30, "max": 40,
+               "tiers": [(31, 2.0), (36, 5.0)]},
+
+    # NIT1-NIT3: Recommended 40, hard max 45
+    "NIT1": {"recommended": 40, "max": 45},
+    "NIT3": {"recommended": 40, "max": 45},
+}
+
+# Penalty per student over recommended capacity (default for rooms without tiers)
+CAPACITY_OVER_PENALTY_PER_STUDENT = 3.0
+# Bonus per student under or at recommended capacity (reward good fit)
+CAPACITY_FIT_BONUS = 2.0
+
 # ── Subject Types ─────────────────────────────────────────────────────────────
 SUBJECT_TYPES = [
     "Core Theory", "Programming", "Systems", "Data Management",
@@ -89,6 +138,9 @@ GA_WEIGHTS = {
     "exact_spec_match":         8.0,
     "load_variance_weight":     1.5,
     "underload_gap_weight":     3.0,
+    # Room capacity weights (integrated into fitness)
+    "capacity_fit_bonus":       2.0,   # per student under/at recommended
+    "capacity_over_penalty":    3.0,   # per student over recommended (default)
 }
 
 # ── Solver Config ─────────────────────────────────────────────────────────────

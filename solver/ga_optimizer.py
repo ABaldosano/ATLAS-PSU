@@ -19,7 +19,10 @@ import time
 from typing import Callable, Optional
 
 from config.settings import UNITS_PER_ASSIGNMENT
-from solver.constraints import faculty_available_at, slot_day
+from solver.constraints import (
+    faculty_available_at, slot_day,
+    room_exceeds_hard_max, rank_rooms_by_capacity_fit,
+)
 from solver.objective_functions import schedule_fitness
 
 
@@ -86,7 +89,6 @@ def _mutate_slot_swap(assignments: list, faculty_list: list, soft_constraints: d
         # Hard: both new slots must be on available days
         if (faculty_available_at(fac, a_j["slot"]) and
                 faculty_available_at(fac, a_i["slot"])):
-            # Slot swap (slots are already in each other's allowed days by construction)
             a_i["slot"], a_j["slot"] = a_j["slot"], a_i["slot"]
             a_i["slot_display"] = _slot_to_12h(a_i["slot"])
             a_j["slot_display"] = _slot_to_12h(a_j["slot"])
@@ -143,10 +145,12 @@ def _mutate_slot_shift(assignments: list, faculty_list: list, soft_constraints: 
     return result
 
 
-def _mutate_room(assignments: list, soft_constraints: dict) -> list:
+def _mutate_room(assignments: list, soft_constraints: dict,
+                 class_sizes: dict = None) -> list:
     """
-    Reassign room for a single assignment, respecting room type compatibility
-    and avoiding room-slot conflicts.
+    Reassign room for a single assignment, respecting room type compatibility,
+    capacity hard maximum, and avoiding room-slot conflicts.
+    Prefers rooms with best capacity fit for the section's student count.
     """
     from config.settings import LABORATORY_ROOMS, ALL_ROOMS
     result = copy.deepcopy(assignments)
@@ -165,16 +169,40 @@ def _mutate_room(assignments: list, soft_constraints: dict) -> list:
     if not free_pool:
         return result
 
-    # Rank: preferred_room > preferred_building > any free
-    def room_score(r: str) -> int:
-        s = 0
-        if preferred_room and r == preferred_room:
-            s += 10
-        if preferred_building and preferred_building.lower() in r.lower():
-            s += 5
-        return s
+    # Get student count for capacity-aware ranking
+    student_count = a.get("student_count", 0)
+    if student_count <= 0 and class_sizes:
+        section_key = a.get("section", "")
+        size_entry = class_sizes.get(section_key)
+        student_count = size_entry.get("size", 0) if isinstance(size_entry, dict) else 0
 
-    free_pool.sort(key=room_score, reverse=True)
+    if student_count > 0:
+        # Exclude rooms exceeding hard max
+        cap_ok = [r for r in free_pool if not room_exceeds_hard_max(r, student_count)]
+        if cap_ok:
+            free_pool = cap_ok
+        # Rank by capacity fit
+        free_pool = rank_rooms_by_capacity_fit(free_pool, student_count)
+    else:
+        # Rank by preference only
+        def room_score(r: str) -> int:
+            s = 0
+            if preferred_room and r == preferred_room:
+                s += 10
+            if preferred_building and preferred_building.lower() in r.lower():
+                s += 5
+            return s
+        free_pool.sort(key=room_score, reverse=True)
+
+    # Honor preferred room if it's at the front of capacity-ranked list
+    if preferred_room and preferred_room in free_pool:
+        # Only override capacity ranking if preferred room also fits well
+        from solver.constraints import get_room_capacity, room_capacity_score
+        pref_score = room_capacity_score(preferred_room, student_count) if student_count > 0 else 0
+        best_score = room_capacity_score(free_pool[0], student_count) if student_count > 0 else 0
+        if pref_score >= best_score - 1.0:  # preferred room is close enough in capacity fit
+            free_pool = [preferred_room] + [r for r in free_pool if r != preferred_room]
+
     new_room = free_pool[0]
 
     room_slot_used.discard(current_key)
@@ -195,6 +223,7 @@ def optimize(
     mutation_rate: float = 0.15,
     progress_cb: Optional[Callable] = None,
     time_limit: float = 120.0,
+    class_sizes: dict = None,
 ) -> tuple[list, dict]:
     """
     Run GA preference optimizer over a valid CP-SAT schedule.
@@ -205,6 +234,7 @@ def optimize(
         generations, population_size, mutation_rate: GA params
         progress_cb: callable(current_gen, total_gens)
         time_limit: wall-clock cap in seconds
+        class_sizes: section → {size} mapping for capacity scoring
 
     Returns:
         (best_schedule, metrics)
@@ -215,7 +245,7 @@ def optimize(
         return base_schedule, {"ga_time_sec": 0, "generations_run": 0, "improvement": 0.0}
 
     def fitness(sched):
-        return schedule_fitness(sched, faculty_list, soft_constraints, static_lookup)
+        return schedule_fitness(sched, faculty_list, soft_constraints, static_lookup, class_sizes)
 
     base_fit = fitness(base_schedule)
 
@@ -226,7 +256,7 @@ def optimize(
         for _ in range(3):
             op = random.choice([_mutate_slot_swap, _mutate_slot_shift, _mutate_room])
             if op == _mutate_room:
-                ind = op(ind, soft_constraints)
+                ind = op(ind, soft_constraints, class_sizes)
             else:
                 ind = op(ind, faculty_list, soft_constraints)
         population.append(ind)
@@ -255,17 +285,15 @@ def optimize(
         new_pop = [copy.deepcopy(scored[i][0]) for i in range(elite_count)]
 
         while len(new_pop) < population_size:
-            # Tournament
             t1 = random.choice(scored[:max(2, population_size // 2)])[0]
             t2 = random.choice(scored[:max(2, population_size // 2)])[0]
             child = copy.deepcopy(t1 if fitness(t1) >= fitness(t2) else t2)
 
-            # Mutate
             if random.random() < mutation_rate:
                 op = random.choice([
                     lambda s: _mutate_slot_swap(s, faculty_list, soft_constraints),
                     lambda s: _mutate_slot_shift(s, faculty_list, soft_constraints),
-                    lambda s: _mutate_room(s, soft_constraints),
+                    lambda s: _mutate_room(s, soft_constraints, class_sizes),
                 ])
                 child = op(child)
 
@@ -278,9 +306,9 @@ def optimize(
     improvement = round(best_fit - base_fit, 2)
 
     return best, {
-        "ga_time_sec":        ga_time,
-        "generations_run":    actual_generations,
-        "base_fitness":       round(base_fit, 2),
-        "final_fitness":      round(best_fit, 2),
-        "improvement":        improvement,
+        "ga_time_sec":      ga_time,
+        "generations_run":  actual_generations,
+        "base_fitness":     round(base_fit, 2),
+        "final_fitness":    round(best_fit, 2),
+        "improvement":      improvement,
     }

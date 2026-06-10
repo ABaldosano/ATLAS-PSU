@@ -49,7 +49,7 @@ def run_ga():
             "crossover":   data.get("crossover",    0.8),
         },
         soft_constraints_incoming=data.get("soft_constraints", {}),
-        class_sizes=_app.class_sizes_store,
+        class_sizes={**_app.class_sizes_store, **data.get("class_sizes", {})},
     )
 
     if "error" in result:

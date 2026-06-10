@@ -93,6 +93,7 @@
           </div>
         </div>
 
+        
         <!-- Schedule assignments emphasized first -->
         <div class="dashboard-chart-card dashboard-schedule-card">
           <div class="dashboard-card-header">
@@ -105,6 +106,43 @@
             <p class="empty-state-msg">Run the optimization to see faculty-subject assignments.</p>
           </div>
         </div>
+
+        <div class="dashboard-chart-card capacity-summary-card" id="capacitySummaryCard" style="display:none;">
+          <div class="dashboard-card-header">
+            <div>
+              <h3>Room Capacity Overview</h3>
+              <p class="dashboard-card-sub">Student-to-room fit analysis across all scheduled assignments</p>
+            </div>
+            <div id="capacityOverallBadge" class="capacity-overall-badge"></div>
+          </div>
+          <div class="capacity-metrics-grid">
+            <div class="capacity-metric-tile capacity-ok">
+              <div class="capacity-metric-value" id="capMetricOk">–</div>
+              <div class="capacity-metric-label">Within Recommended</div>
+              <div class="capacity-metric-pct" id="capMetricOkPct"></div>
+            </div>
+            <div class="capacity-metric-tile capacity-warn">
+              <div class="capacity-metric-value" id="capMetricWarn">–</div>
+              <div class="capacity-metric-label">Over Recommended</div>
+              <div class="capacity-metric-pct" id="capMetricWarnPct"></div>
+            </div>
+            <div class="capacity-metric-tile capacity-hard">
+              <div class="capacity-metric-value" id="capMetricHard">–</div>
+              <div class="capacity-metric-label">Hard Violations</div>
+              <div class="capacity-metric-pct" id="capMetricHardPct"></div>
+            </div>
+            <div class="capacity-metric-tile capacity-total">
+              <div class="capacity-metric-value" id="capMetricTotal">–</div>
+              <div class="capacity-metric-label">Total Evaluated</div>
+              <div class="capacity-metric-pct">assignments</div>
+            </div>
+          </div>
+          <div id="capacityHardViolationsList" class="capacity-violations-list" style="display:none;">
+            <div class="capacity-violations-header">⚠ Hard Capacity Violations</div>
+            <div id="capacityHardViolationsItems"></div>
+          </div>
+        </div>
+
 
         <!-- Workload chart secondary -->
         <div class="dashboard-chart-card dashboard-chart-secondary">
@@ -146,10 +184,10 @@
             <summary>GA Parameters</summary>
             <div class="settings-body">
               <label for="populationSize">Population Size 
-                <input type="number" id="populationSize" value="30" min="5" max="200">
+                <input type="number" id="populationSize" value="50" min="5" max="200">
               </label>
               <label for="numGenerations">Generations 
-                <input type="number" id="numGenerations" value="70" min="10" max="1000">
+                <input type="number" id="numGenerations" value="100" min="10" max="1000">
               </label>
               <label for="mutationRate">Mutation Rate 
                 <input type="number" id="mutationRate" value="0.09" step="0.01" min="0" max="1">
@@ -196,6 +234,8 @@
                     <th data-key="class_type">Class <span class="sort-arrow">&#9650;</span></th>
                     <th data-key="slot">Slot <span class="sort-arrow">&#9650;</span></th>
                     <th data-key="room">Room <span class="sort-arrow">&#9650;</span></th>
+                    <th>Students</th>
+                    <th>Capacity</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -262,6 +302,49 @@
           </div>
         </div>
         <div id="fairnessPerFaculty" style="margin-bottom:28px;"></div>
+
+        <!-- ── CAPACITY ANALYTICS ── -->
+        <h3 class="section-heading">Room Capacity Analytics</h3>
+        <div class="capacity-metrics-grid" id="analyticsCapMetricsGrid" style="margin-bottom:var(--space-5);">
+          <div class="capacity-metric-tile capacity-ok">
+            <div class="capacity-metric-value" id="analyticsCapCompliant">–</div>
+            <div class="capacity-metric-label">Within Recommended</div>
+            <div class="capacity-metric-pct" id="analyticsCapCompliantPct"></div>
+          </div>
+          <div class="capacity-metric-tile capacity-warn">
+            <div class="capacity-metric-value" id="analyticsCapOver">–</div>
+            <div class="capacity-metric-label">Over Recommended</div>
+            <div class="capacity-metric-pct" id="analyticsCapOverPct"></div>
+          </div>
+          <div class="capacity-metric-tile capacity-hard">
+            <div class="capacity-metric-value" id="analyticsCapViolations">–</div>
+            <div class="capacity-metric-label">Hard Violations</div>
+            <div class="capacity-metric-pct" id="analyticsCapViolationsPct"></div>
+          </div>
+          <div class="capacity-metric-tile capacity-total">
+            <div class="capacity-metric-value" id="analyticsCapTotal">–</div>
+            <div class="capacity-metric-label">Total Evaluated</div>
+            <div class="capacity-metric-pct">assignments</div>
+          </div>
+        </div>
+        <div class="dashboard-chart-card" style="margin-bottom:28px;">
+          <h3>Room Utilization &amp; Capacity</h3>
+          <div style="overflow-x:auto;">
+            <table class="cap-details-table" id="roomUtilCapTable">
+              <thead><tr><th>Room</th><th>Assigned</th><th>Occupancy</th><th>Recommended Cap</th><th>Max Cap</th></tr></thead>
+              <tbody id="roomUtilCapBody"><tr><td colspan="5" class="empty-state-msg">Run the optimization to see room utilization.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="dashboard-chart-card" id="capacityDetailsSection" style="display:none;margin-bottom:28px;">
+          <h3>Capacity Assignment Details</h3>
+          <div style="overflow-x:auto;">
+            <table class="cap-details-table" id="capacityDetailsTable">
+              <thead><tr><th>Room</th><th>Section</th><th>Subject</th><th>Students</th><th>Recommended</th><th>Maximum</th><th>Utilization</th><th>Status</th></tr></thead>
+              <tbody id="capacityDetailsBody"><tr><td colspan="8" class="empty-state-msg">No capacity detail data yet.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
 
         <h3 class="section-heading">Summary of Results</h3>
         <table id="reportsSummaryTable">
@@ -386,11 +469,21 @@
 
         <!-- ── ROOM MANAGEMENT ── -->
         <h3 class="section-heading">Room Management</h3>
+        <div class="room-capacity-legend">
+          <span class="room-cap-legend-item"><span class="room-cap-dot dot-rec"></span>Recommended cap — soft target for optimal class fit</span>
+          <span class="room-cap-legend-item"><span class="room-cap-dot dot-max"></span>Max cap — hard limit; assignments exceeding this are rejected</span>
+        </div>
         <div class="rooms-grid">
           <div class="room-section-card">
             <div class="room-section-header">
               <span class="room-section-title">Lecture Rooms</span>
               <button class="btn btn-secondary" id="addLectureRoom" style="padding:0.3rem 0.75rem;font-size:0.8rem;">+ Add Room</button>
+            </div>
+            <div class="room-cap-col-labels">
+              <span>Room Name</span>
+              <span>Rec.</span>
+              <span>Max</span>
+              <span class="room-cap-col-spacer"></span>
             </div>
             <div id="lectureRoomsList" class="room-list"></div>
           </div>
@@ -398,6 +491,12 @@
             <div class="room-section-header">
               <span class="room-section-title">Laboratory Rooms</span>
               <button class="btn btn-secondary" id="addLabRoom" style="padding:0.3rem 0.75rem;font-size:0.8rem;">+ Add Room</button>
+            </div>
+            <div class="room-cap-col-labels">
+              <span>Room Name</span>
+              <span>Rec.</span>
+              <span>Max</span>
+              <span class="room-cap-col-spacer"></span>
             </div>
             <div id="labRoomsList" class="room-list"></div>
           </div>

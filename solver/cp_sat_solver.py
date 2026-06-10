@@ -15,6 +15,7 @@ Hard constraints enforced:
   - No faculty double-booking (same slot)
   - No room conflicts (same slot)
   - Room compatibility (LAB subjects → LAB rooms only)
+  - Room capacity hard maximum (student_count > room max → reject)
   - Section coverage (all sections assigned)
 """
 
@@ -29,6 +30,7 @@ from config.settings import (
 from solver.constraints import (
     faculty_qualifies, faculty_available_at, faculty_load_ok,
     room_compatible, slot_day,
+    room_exceeds_hard_max, rank_rooms_by_capacity_fit,
 )
 
 # ── Slot helpers ──────────────────────────────────────────────────────────────
@@ -61,17 +63,46 @@ def _room_pool(class_type: str) -> list:
 
 
 def _assign_room(class_type: str, slot: str, room_slot_used: set,
+                 student_count: int = 0,
                  preferred_room: Optional[str] = None) -> str:
+    """
+    Assign best-fit room for the given class type and slot.
+    Respects room capacity hard maximum when student_count > 0.
+    Ranks rooms by capacity fit (prefers rooms where students <= recommended).
+    """
     pool = _room_pool(class_type)
-    candidates = list(pool)
-    if preferred_room and preferred_room in pool:
-        candidates = [preferred_room] + [r for r in pool if r != preferred_room]
-    random.shuffle(candidates[1:] if preferred_room else candidates)
-    for room in candidates:
-        if f"{room}|{slot}" not in room_slot_used:
-            room_slot_used.add(f"{room}|{slot}")
-            return room
-    return candidates[0] if candidates else "Unassigned"
+
+    # Build candidate list: exclude occupied slots and hard-max violations
+    free_pool = [r for r in pool if f"{r}|{slot}" not in room_slot_used]
+
+    if student_count > 0:
+        # Hard constraint: exclude rooms that exceed maximum capacity
+        free_pool = [r for r in free_pool if not room_exceeds_hard_max(r, student_count)]
+        if not free_pool:
+            free_pool = [r for r in pool if f"{r}|{slot}" not in room_slot_used]
+
+    if not free_pool:
+        candidates = pool
+    else:
+        if student_count > 0:
+            # Rank by capacity fit — tightest comfortable fit first
+            candidates = rank_rooms_by_capacity_fit(free_pool, student_count)
+        else:
+            candidates = list(free_pool)
+
+    # Honor preferred room if available and fits
+    if preferred_room and preferred_room in candidates:
+        candidates = [preferred_room] + [r for r in candidates if r != preferred_room]
+    elif preferred_room and preferred_room in pool:
+        # Preferred room is occupied or over capacity — put at end
+        pass
+
+    if not candidates:
+        return "Unassigned"
+
+    chosen = candidates[0]
+    room_slot_used.add(f"{chosen}|{slot}")
+    return chosen
 
 
 # ── OR-Tools CP-SAT solver ────────────────────────────────────────────────────
@@ -106,7 +137,6 @@ def _solve_with_ortools(sections: list, faculty_list: list, static_lookup: dict,
     for s_idx in range(len(sections)):
         vars_for_s = [x[k] for k in x if k[0] == s_idx]
         if not vars_for_s:
-            # No eligible assignment exists — add a dummy to avoid infeasibility crash
             continue
         model.AddExactlyOne(vars_for_s)
 
@@ -117,7 +147,7 @@ def _solve_with_ortools(sections: list, faculty_list: list, static_lookup: dict,
             if len(vars_ft) > 1:
                 model.AddAtMostOne(vars_ft)
 
-    # Constraint 2b: no section double-booking (a section can't have 2 subjects at same slot)
+    # Constraint 2b: no section double-booking
     section_list = list(set(sec.get("section", "") for sec in sections if sec.get("section", "")))
     for sec_key in section_list:
         sec_indices = [i for i, sec in enumerate(sections) if sec.get("section", "") == sec_key]
@@ -133,7 +163,7 @@ def _solve_with_ortools(sections: list, faculty_list: list, static_lookup: dict,
             max_assignments = fac.get("absolute_max_units", 30) // UNITS_PER_ASSIGNMENT
             model.Add(sum(vars_f) <= max_assignments)
 
-    # Objective: maximise exact spec matches (all are already eligible — prefer exact)
+    # Objective: maximise exact spec matches
     obj_terms = []
     for (s_idx, f_idx, t_idx), var in x.items():
         from solver.constraints import is_exact_spec_match
@@ -152,7 +182,7 @@ def _solve_with_ortools(sections: list, faculty_list: list, static_lookup: dict,
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return None
 
-    # Extract solution
+    # Extract solution — use capacity-aware room assignment
     room_slot_used: set = set()
     assignments = []
     for (s_idx, f_idx, t_idx), var in x.items():
@@ -160,18 +190,21 @@ def _solve_with_ortools(sections: list, faculty_list: list, static_lookup: dict,
             sec = sections[s_idx]
             fac = faculty_list[f_idx]
             slot = ALL_SLOT_STRINGS[t_idx]
-            room = _assign_room(sec.get("class_type", "LECTURE"), slot, room_slot_used)
+            student_count = sec.get("student_count", 0)
+            room = _assign_room(sec.get("class_type", "LECTURE"), slot, room_slot_used,
+                                student_count=student_count)
             assignments.append({
-                "faculty":      fac["name"],
-                "subject":      sec["name"],
-                "type":         sec.get("type", "Core Theory"),
-                "class_type":   sec.get("class_type", "LECTURE"),
-                "slot":         slot,
-                "slot_display": _slot_to_12h(slot),
-                "semester":     sec.get("semester", ""),
-                "year":         sec.get("year", ""),
-                "section":      sec.get("section", ""),
-                "room":         room,
+                "faculty":       fac["name"],
+                "subject":       sec["name"],
+                "type":          sec.get("type", "Core Theory"),
+                "class_type":    sec.get("class_type", "LECTURE"),
+                "slot":          slot,
+                "slot_display":  _slot_to_12h(slot),
+                "semester":      sec.get("semester", ""),
+                "year":          sec.get("year", ""),
+                "section":       sec.get("section", ""),
+                "room":          room,
+                "student_count": student_count,
             })
 
     return assignments
@@ -232,6 +265,10 @@ def _solve_with_backtracking(sections: list, faculty_list: list, static_lookup: 
         # Bias: prefer faculty with lower load
         shuffled.sort(key=lambda o: fac_loads.get(o[0], 0))
 
+        student_count = sec.get("student_count", 0)
+        class_type = sec.get("class_type", "LECTURE")
+        room_pool = _room_pool(class_type)
+
         for fac_name, slot in shuffled:
             fac = fac_map[fac_name]
 
@@ -244,10 +281,15 @@ def _solve_with_backtracking(sections: list, faculty_list: list, static_lookup: 
             if _sec_key and slot in section_slot_used.get(_sec_key, set()):
                 continue
 
-            # Try to assign a room
-            class_type = sec.get("class_type", "LECTURE")
-            room_pool = _room_pool(class_type)
-            room = next((r for r in room_pool if f"{r}|{slot}" not in room_slot_used), None)
+            # Find best-fit room respecting capacity hard max
+            free_rooms = [r for r in room_pool if f"{r}|{slot}" not in room_slot_used]
+            if student_count > 0:
+                capacity_ok = [r for r in free_rooms if not room_exceeds_hard_max(r, student_count)]
+                ranked = rank_rooms_by_capacity_fit(capacity_ok, student_count) if capacity_ok else []
+                room = ranked[0] if ranked else None
+            else:
+                room = free_rooms[0] if free_rooms else None
+
             if room is None:
                 continue
 
@@ -261,16 +303,17 @@ def _solve_with_backtracking(sections: list, faculty_list: list, static_lookup: 
                 section_slot_used.setdefault(_sec_key, set()).add(slot)
 
             result.append({
-                "faculty":      fac_name,
-                "subject":      sec["name"],
-                "type":         sec.get("type", "Core Theory"),
-                "class_type":   class_type,
-                "slot":         slot,
-                "slot_display": _slot_to_12h(slot),
-                "semester":     sec.get("semester", ""),
-                "year":         sec.get("year", ""),
-                "section":      sec.get("section", ""),
-                "room":         room,
+                "faculty":       fac_name,
+                "subject":       sec["name"],
+                "type":          sec.get("type", "Core Theory"),
+                "class_type":    class_type,
+                "slot":          slot,
+                "slot_display":  _slot_to_12h(slot),
+                "semester":      sec.get("semester", ""),
+                "year":          sec.get("year", ""),
+                "section":       sec.get("section", ""),
+                "room":          room,
+                "student_count": student_count,
             })
 
             if _attempt(idx + 1):
@@ -286,18 +329,18 @@ def _solve_with_backtracking(sections: list, faculty_list: list, static_lookup: 
                 section_slot_used.get(_sec_key, set()).discard(slot)
 
         # No valid assignment found — insert unassigned placeholder and continue
-        # This prevents total failure on impossible sub-problems
         result.append({
-            "faculty":      "",
-            "subject":      sec["name"],
-            "type":         sec.get("type", "Core Theory"),
-            "class_type":   sec.get("class_type", "LECTURE"),
-            "slot":         ALL_SLOT_STRINGS[idx % len(ALL_SLOT_STRINGS)],
-            "slot_display": _slot_to_12h(ALL_SLOT_STRINGS[idx % len(ALL_SLOT_STRINGS)]),
-            "semester":     sec.get("semester", ""),
-            "year":         sec.get("year", ""),
-            "section":      sec.get("section", ""),
-            "room":         "Unassigned",
+            "faculty":       "",
+            "subject":       sec["name"],
+            "type":          sec.get("type", "Core Theory"),
+            "class_type":    class_type,
+            "slot":          ALL_SLOT_STRINGS[idx % len(ALL_SLOT_STRINGS)],
+            "slot_display":  _slot_to_12h(ALL_SLOT_STRINGS[idx % len(ALL_SLOT_STRINGS)]),
+            "semester":      sec.get("semester", ""),
+            "year":          sec.get("year", ""),
+            "section":       sec.get("section", ""),
+            "room":          "Unassigned",
+            "student_count": student_count,
         })
         return _attempt(idx + 1)
 
@@ -360,12 +403,16 @@ def _repair_unassigned(assignments: list, faculty_list: list, static_lookup: dic
                     chosen_slot = s
                     break
 
-        # Room
+        # Room — capacity-aware
         class_type = a.get("class_type", "LECTURE")
-        room = next(
-            (r for r in _room_pool(class_type) if f"{r}|{chosen_slot}" not in room_slot_used),
-            "Unassigned"
-        )
+        student_count = a.get("student_count", 0)
+        free_rooms = [r for r in _room_pool(class_type) if f"{r}|{chosen_slot}" not in room_slot_used]
+        if student_count > 0:
+            cap_ok = [r for r in free_rooms if not room_exceeds_hard_max(r, student_count)]
+            ranked = rank_rooms_by_capacity_fit(cap_ok, student_count) if cap_ok else []
+            room = ranked[0] if ranked else "Unassigned"
+        else:
+            room = free_rooms[0] if free_rooms else "Unassigned"
 
         if fac_name:
             fac_slot_used.setdefault(fac_name, set()).add(chosen_slot)
@@ -411,9 +458,9 @@ def solve(sections: list, faculty_list: list, static_lookup: dict,
     unassigned = sum(1 for a in result if not a.get("faculty"))
 
     metrics = {
-        "solver_used":     solver_used,
-        "solve_time_sec":  solve_time,
-        "section_count":   len(sections),
+        "solver_used":      solver_used,
+        "solve_time_sec":   solve_time,
+        "section_count":    len(sections),
         "unassigned_count": unassigned,
     }
 

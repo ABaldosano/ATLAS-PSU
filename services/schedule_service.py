@@ -73,6 +73,7 @@ def expand_subjects_to_sections(subjects_raw: list, active_semester: str,
     """
     Expand subject definitions to (subject × section) pairs.
     Each pair becomes one scheduling unit.
+    Embeds student_count from class_sizes for capacity-aware scheduling.
     """
     filtered = subjects_raw
     if active_semester:
@@ -84,15 +85,27 @@ def expand_subjects_to_sections(subjects_raw: list, active_semester: str,
         if not s.get("name"):
             continue
         year = s.get("year", "")
+        section_key = s.get("section", "")
+
+        # Resolve student count from class_sizes
+        size_entry = class_sizes.get(section_key) if section_key else None
+        if isinstance(size_entry, dict):
+            student_count = size_entry.get("size", 0)
+        elif isinstance(size_entry, (int, float)):
+            student_count = int(size_entry)
+        else:
+            student_count = 0
+
         sections.append({
-    "name": s.get("name", ""),
-    "type": s.get("type", "Core Theory"),
-    "class_type": s.get("class_type", "LECTURE"),
-    "hours": int(s.get("hours", 2)),
-    "semester": s.get("semester", active_semester or ""),
-    "year": year,
-    "section": s.get("section", ""),
-})
+            "name":          s.get("name", ""),
+            "type":          s.get("type", "Core Theory"),
+            "class_type":    s.get("class_type", "LECTURE"),
+            "hours":         int(s.get("hours", 2)),
+            "semester":      s.get("semester", active_semester or ""),
+            "year":          year,
+            "section":       section_key,
+            "student_count": student_count,
+        })
     return sections
 
 
@@ -148,9 +161,9 @@ def run_scheduling_job(
         _set_progress(phase="ga", current=40)
 
         # ── Phase 2: GA optimizer ─────────────────────────────────────────────
-        generations    = max(1, ga_params.get("generations", 50))
-        population     = max(4, ga_params.get("population", 20))
-        mutation_rate  = float(ga_params.get("mutation", 0.15))
+        generations   = max(1, ga_params.get("generations", 50))
+        population    = max(4, ga_params.get("population", 20))
+        mutation_rate = float(ga_params.get("mutation", 0.15))
 
         def ga_progress(gen, total):
             pct = 40 + int(gen / total * 50) if total else 40  # GA = 40-90%
@@ -165,6 +178,7 @@ def run_scheduling_job(
             population_size=population,
             mutation_rate=mutation_rate,
             progress_cb=ga_progress,
+            class_sizes=class_sizes,
         )
 
         _set_progress(current=90, phase="analytics")
@@ -172,7 +186,8 @@ def run_scheduling_job(
         # ── Phase 3: Analytics ────────────────────────────────────────────────
         combined_metrics = {**cp_metrics, **ga_metrics}
         analytics = compute_analytics(
-            best_assignments, faculty_list, static_lookup, sc, combined_metrics
+            best_assignments, faculty_list, static_lookup, sc, combined_metrics,
+            class_sizes=class_sizes,
         )
 
         # Warnings
@@ -182,6 +197,19 @@ def run_scheduling_job(
             warnings.append(f"{unassigned} section(s) could not be assigned to any faculty.")
         if cp_metrics.get("solver_used") == "cp_backtracking":
             warnings.append("OR-Tools not available — used backtracking solver.")
+
+        # Capacity warnings from analytics
+        cap_analytics = analytics.get("capacity_metrics", {})
+        hard_violations = cap_analytics.get("hard_violations", [])
+        over_recommended = cap_analytics.get("over_recommended_count", 0)
+        if hard_violations:
+            warnings.append(
+                f"{len(hard_violations)} assignment(s) exceed room hard capacity limits."
+            )
+        if over_recommended > 0:
+            warnings.append(
+                f"{over_recommended} assignment(s) exceed recommended room capacity."
+            )
 
         _set_progress(
             current=100,
