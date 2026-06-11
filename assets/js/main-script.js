@@ -32,7 +32,32 @@ const DAY_COLORS = {
   Thu: 'Thu', Fri: 'Fri', Sat: 'Sat'
 };
 
-const MAX_UNITS = 24;
+// MAX_UNITS is now dynamic — read from Settings (localStorage), default 24
+function getMaxUnits() {
+  try {
+    const s = JSON.parse(localStorage.getItem('systemSettings') || '{}');
+    return parseInt(s.max_units) || 24;
+  } catch(e) { return 24; }
+}
+// Keep a live reference updated on each access
+Object.defineProperty(window, 'MAX_UNITS', { get: getMaxUnits });
+
+// UNITS_PER_ASSIGNMENT — dynamic, read from Settings (localStorage), default 2
+function getUnitsPerAssignment() {
+  try {
+    const s = JSON.parse(localStorage.getItem('systemSettings') || '{}');
+    return parseInt(s.units_per_assignment) || 2;
+  } catch(e) { return 2; }
+}
+
+// Per-faculty max_units lookup (falls back to global Standard Max Units)
+function getFacultyMaxUnitsMap() {
+  const map = {};
+  (typeof getFacultyFromTable === 'function' ? getFacultyFromTable() : []).forEach(f => {
+    map[f.name] = f.max_units || getMaxUnits();
+  });
+  return map;
+}
 
 const DATA_VERSION = 'v5'; // bump to wipe stale localStorage on deploy
 
@@ -244,7 +269,8 @@ function initCharts() {
             callbacks: {
               label: ctx => {
                 const v = ctx.raw;
-                let status = v > MAX_UNITS ? ' OVERLOAD' : v === MAX_UNITS ? ' MAX LOAD' : v <= 2 ? ' TOO LOW' : '';
+                const fmax = getFacultyMaxUnitsMap()[ctx.label] || MAX_UNITS;
+                let status = v > fmax ? ' OVERLOAD' : v === fmax ? ' MAX LOAD' : v <= 2 ? ' TOO LOW' : '';
                 return `${ctx.label}: ${v} units${status}`;
               }
             }
@@ -276,7 +302,8 @@ function initCharts() {
             callbacks: {
               label: ctx => {
                 const v = ctx.raw;
-                const status = v > MAX_UNITS ? ' (OVERLOAD)' : v === MAX_UNITS ? ' (MAX LOAD)' : '';
+                const fmax = getFacultyMaxUnitsMap()[ctx.label] || MAX_UNITS;
+                const status = v > fmax ? ' (OVERLOAD)' : v === fmax ? ' (MAX LOAD)' : '';
                 return `${ctx.label}: ${v} units${status}`;
               }
             }
@@ -364,9 +391,9 @@ function switchPanel(index) {
 /* ============================================================
    4. COLOR HELPERS
    ============================================================ */
-function getLoadColor(value) {
-  if (value > MAX_UNITS) return '#FF0000';
-  if (value === MAX_UNITS) return '#FF6700';
+function getLoadColor(value, max = MAX_UNITS) {
+  if (value > max) return '#FF0000';
+  if (value === max) return '#FF6700';
   if (value <= 2) return '#FF0000';
   return '#88E788';
 }
@@ -384,16 +411,19 @@ function getProgressColor(percent) {
 function updateCharts(data) {
   if (!data || !data.length) return;
 
+  const upa = getUnitsPerAssignment();
+  const facMaxMap = getFacultyMaxUnitsMap();
+
   const counts = {};
   data.forEach(item => {
     if (!item.faculty) return;
-    counts[item.faculty] = (counts[item.faculty] || 0) + 2;
+    counts[item.faculty] = (counts[item.faculty] || 0) + upa;
   });
 
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const labels = sorted.map(x => x[0]);
   const values = sorted.map(x => x[1]);
-  const colors = values.map(v => getLoadColor(v));
+  const colors = values.map((v, i) => getLoadColor(v, facMaxMap[labels[i]] || MAX_UNITS));
 
   if (dashboardChart) {
     dashboardChart.data.labels = labels;
@@ -419,17 +449,17 @@ function updateCharts(data) {
     reportsBarChart.update();
   }
 
-  updateDashboardStats(counts);
+  updateDashboardStats(counts, facMaxMap);
 }
 
 /* ============================================================
    5b. DASHBOARD STAT CARDS
    ============================================================ */
-function updateDashboardStats(counts) {
+function updateDashboardStats(counts, facMaxMap = {}) {
   const values = Object.values(counts);
   if (!values.length) return;
   const avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
-  const overloaded = values.filter(v => v > MAX_UNITS).length;
+  const overloaded = Object.entries(counts).filter(([name, v]) => v > (facMaxMap[name] || MAX_UNITS)).length;
   const maxV = Math.max(...values);
   const minV = Math.min(...values);
   const balance = maxV > 0 ? ((1 - (maxV - minV) / maxV) * 100).toFixed(0) : 100;
@@ -529,7 +559,6 @@ function renderTimetable(data) {
   const SLOT_DEFS = [
     { label: '7–9',   startH: 7,  endH: 9  },
     { label: '9–11',  startH: 9,  endH: 11 },
-    { label: '11–13', startH: 11, endH: 13 },
     { label: '13–15', startH: 13, endH: 15 },
     { label: '15–17', startH: 15, endH: 17 },
     { label: '17–19', startH: 17, endH: 19 },
@@ -623,10 +652,14 @@ function updateReportsPanel(data) {
 
   const sortedFaculty = Object.keys(byFaculty).sort();
 
+  const upa = getUnitsPerAssignment();
+  const facMaxMap = getFacultyMaxUnitsMap();
+
   sortedFaculty.forEach(faculty => {
     const assignments = byFaculty[faculty];
-    const totalUnits  = assignments.length * 2;
-    const unitsCls    = totalUnits > MAX_UNITS ? 'units-over' : totalUnits === MAX_UNITS ? 'units-max' : 'units-ok';
+    const totalUnits  = assignments.length * upa;
+    const fmax        = facMaxMap[faculty] || MAX_UNITS;
+    const unitsCls    = totalUnits > fmax ? 'units-over' : totalUnits === fmax ? 'units-max' : 'units-ok';
 
     // Sort assignments: by day order then time
     const sorted = [...assignments].sort((a, b) => {
@@ -727,10 +760,11 @@ function computeFairnessReport(data) {
   if (!data || !data.length) return;
 
   // Build per-faculty load map
+  const upa = getUnitsPerAssignment();
   const loadMap = {};
   data.forEach(item => {
     if (!item.faculty) return;
-    loadMap[item.faculty] = (loadMap[item.faculty] || 0) + 2; // each item is 2 units
+    loadMap[item.faculty] = (loadMap[item.faculty] || 0) + upa; // units per assignment (configurable)
   });
 
   const facultyData = getFacultyFromTable();
@@ -797,7 +831,8 @@ function computeFairnessReport(data) {
     const d = perFaculty[name];
     const pct = d.total ? Math.round((d.matched / d.total) * 100) : 0;
     const cls = pct === 100 ? 'match-yes' : pct >= 50 ? 'match-partial' : 'match-no';
-    const loadCls = d.load > MAX_UNITS ? 'badge-danger' : d.load === MAX_UNITS ? 'badge-warning' : 'badge-success';
+    const facMax = facMeta[name]?.max_units || MAX_UNITS;
+    const loadCls = d.load > facMax ? 'badge-danger' : d.load === facMax ? 'badge-warning' : 'badge-success';
 
     return `
       <tr>
@@ -966,6 +1001,8 @@ async function triggerGARunAPI() {
   // Load soft constraints and include in payload for backend scoring
   const softConstraints = loadSoftConstraintsFromStorage();
 
+  const sysCfg = getSystemSettings();
+
   const payload = {
     faculty:          getFacultyFromTable(),
     subjects:         expandedSubjects,
@@ -976,6 +1013,9 @@ async function triggerGARunAPI() {
     soft_constraints: softConstraints,
     active_semester:  mode ? mode.semester : null,
     class_sizes:      getClassSizes(),
+    room_capacity:    runtimeRoomCapacity,
+    units_per_assignment: sysCfg.units_per_assignment,
+    cp_sat_time_limit:    sysCfg.cp_sat_time_limit,
   };
 
   const response = await fetch(`${API_BASE}/run-ga`, {
@@ -1096,7 +1136,8 @@ function addFacultyRow(data = {}) {
 
   const nameValue     = data.name || '';
   const specsSelected = data.specialization || [];
-  const maxUnits      = data.max_units !== undefined ? data.max_units : 24;
+  const maxUnits      = data.max_units !== undefined ? data.max_units : getSystemSettings().max_units;
+  const overloadBuffer = data.overload_buffer !== undefined ? data.overload_buffer : 6;
   // Availability is stored and sent to the backend as short names (Mon, Tue, Wed, Thu, Fri, Sat)
   // matching DAYS in app.py. Normalize any legacy long-name values on load.
   const DAY_LONG_TO_SHORT = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Friday:'Fri', Saturday:'Sat' };
@@ -1131,7 +1172,8 @@ function addFacultyRow(data = {}) {
         </div>
       </div>
     </td>
-    <td><input type="number" value="${maxUnits}" min="0" max="50"></td>
+    <td><input type="number" value="${maxUnits}" min="0" max="50" title="Max Units"></td>
+    <td><input type="number" value="${overloadBuffer}" min="0" max="20" title="Overload Buffer (added to Max Units for absolute hard cap)"></td>
     <td><div class="avail-checkboxes">${daysHTML}</div></td>
     <td><button type="button" class="btn-delete row-action-btn" title="Delete Row">Delete</button></td>
   `;
@@ -1239,14 +1281,17 @@ function getFacultyFromTable() {
   return Array.from(document.querySelectorAll('#facultyTable tbody tr')).map(row => {
     const name = row.querySelector('input[type="text"]').value.trim();
     const specs = Array.from(row.querySelectorAll('.dropdown-content input:checked')).map(c => c.value);
-    const maxUnits = parseInt(row.querySelector('input[type="number"]').value, 10) || 24;
+    const numInputs = row.querySelectorAll('input[type="number"]');
+    const maxUnits = parseInt(numInputs[0]?.value, 10) || 24;
+    const overloadBuffer = parseInt(numInputs[1]?.value, 10) || 6;
     const avail = Array.from(row.querySelectorAll('.avail-checkboxes input:checked')).map(c => c.value);
 
     return {
       name,
       specialization: specs,
       max_units: maxUnits,
-      absolute_max_units: maxUnits + 6, // Buffer margin limit definition mapping metric rules
+      overload_buffer: overloadBuffer,
+      absolute_max_units: maxUnits + overloadBuffer,
       availability: avail
     };
   }).filter(f => f.name);
@@ -1295,17 +1340,17 @@ function initEditFacultyModal() {
   }
 
   const TIME_SLOTS = [
-    'Mon: 7:00-9:00',   'Mon: 9:00-11:00',   'Mon: 11:00-13:00',
+    'Mon: 7:00-9:00',   'Mon: 9:00-11:00',
     'Mon: 13:00-15:00', 'Mon: 15:00-17:00',   'Mon: 17:00-19:00',
-    'Tue: 7:00-9:00',   'Tue: 9:00-11:00',   'Tue: 11:00-13:00',
+    'Tue: 7:00-9:00',   'Tue: 9:00-11:00',
     'Tue: 13:00-15:00', 'Tue: 15:00-17:00',   'Tue: 17:00-19:00',
-    'Wed: 7:00-9:00',   'Wed: 9:00-11:00',   'Wed: 11:00-13:00',
+    'Wed: 7:00-9:00',   'Wed: 9:00-11:00',
     'Wed: 13:00-15:00', 'Wed: 15:00-17:00',   'Wed: 17:00-19:00',
-    'Thu: 7:00-9:00',   'Thu: 9:00-11:00',   'Thu: 11:00-13:00',
+    'Thu: 7:00-9:00',   'Thu: 9:00-11:00',
     'Thu: 13:00-15:00', 'Thu: 15:00-17:00',   'Thu: 17:00-19:00',
-    'Fri: 7:00-9:00',   'Fri: 9:00-11:00',   'Fri: 11:00-13:00',
+    'Fri: 7:00-9:00',   'Fri: 9:00-11:00',
     'Fri: 13:00-15:00', 'Fri: 15:00-17:00',   'Fri: 17:00-19:00',
-    'Sat: 7:00-9:00',   'Sat: 9:00-11:00',   'Sat: 11:00-13:00',
+    'Sat: 7:00-9:00',   'Sat: 9:00-11:00',
     'Sat: 13:00-15:00', 'Sat: 15:00-17:00',   'Sat: 17:00-19:00',
   ];
 
@@ -1680,11 +1725,15 @@ function renderDashboardAssignments(data) {
     return;
   }
 
+  const upa = getUnitsPerAssignment();
+  const facMaxMap = getFacultyMaxUnitsMap();
+
   let html = '<div class="fac-assign-grid">';
   Object.keys(byFaculty).sort().forEach(faculty => {
     const items = byFaculty[faculty];
-    const units = items.length * 2;
-    const colorClass = units > MAX_UNITS ? 'units-over' : units === MAX_UNITS ? 'units-max' : 'units-ok';
+    const units = items.length * upa;
+    const fmax  = facMaxMap[faculty] || MAX_UNITS;
+    const colorClass = units > fmax ? 'units-over' : units === fmax ? 'units-max' : 'units-ok';
 
     // Sort items: by subject name then section
     const sorted = [...items].sort((a, b) => {
@@ -1825,11 +1874,15 @@ function generatePrintReport() {
     byFaculty[item.faculty].push(item);
   });
 
+  const upa = getUnitsPerAssignment();
+  const facMaxMap = getFacultyMaxUnitsMap();
+
   const facultyRows = Object.keys(byFaculty).sort().map(facName => {
     const items = byFaculty[facName];
-    const units = items.length * 2;
+    const units = items.length * upa;
+    const fmax  = facMaxMap[facName] || MAX_UNITS;
     const subjectsList = Array.from(new Set(items.map(i => i.subject))).join(', ');
-    const loadStatus = units > MAX_UNITS ? 'OVERLOAD' : units === MAX_UNITS ? 'MAX LOAD' : 'NORMAL';
+    const loadStatus = units > fmax ? 'OVERLOAD' : units === fmax ? 'MAX LOAD' : 'NORMAL';
     return `
       <tr>
         <td><strong>${escapeHTML(facName)}</strong></td>
@@ -2275,6 +2328,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initRoomManagement();
   initClassSizesManagement();
   initAcademicMode();
+  initSystemSettings();
 
   // Load faculty
   const savedFaculty = loadFacultyFromStorage();
@@ -2399,6 +2453,44 @@ function filterResultBySemester(data) {
   if (!validNames.size) return data; // no subject list to filter against, return all
 
   return data.filter(item => validNames.has(item.subject));
+}
+
+/* ============================================================
+   SYSTEM SETTINGS (units_per_assignment, cp_sat_time_limit, max_units display)
+   ============================================================ */
+function getSystemSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('systemSettings') || '{}');
+    return {
+      max_units:            parseInt(s.max_units)            || 24,
+      units_per_assignment: parseInt(s.units_per_assignment) || 2,
+      cp_sat_time_limit:    parseFloat(s.cp_sat_time_limit)  || 60.0,
+    };
+  } catch(e) {
+    return { max_units: 24, units_per_assignment: 2, cp_sat_time_limit: 60.0 };
+  }
+}
+
+function saveSystemSettings(settings) {
+  try { localStorage.setItem('systemSettings', JSON.stringify(settings)); } catch(e) {}
+}
+
+function initSystemSettings() {
+  const s = getSystemSettings();
+  const inp = id => document.getElementById(id);
+  if (inp('sysMaxUnits'))           inp('sysMaxUnits').value           = s.max_units;
+  if (inp('sysUnitsPerAssignment')) inp('sysUnitsPerAssignment').value = s.units_per_assignment;
+  if (inp('sysCpSatTimeLimit'))     inp('sysCpSatTimeLimit').value     = s.cp_sat_time_limit;
+
+  document.getElementById('saveSystemSettings')?.addEventListener('click', () => {
+    const updated = {
+      max_units:            parseInt(inp('sysMaxUnits')?.value)           || 24,
+      units_per_assignment: parseInt(inp('sysUnitsPerAssignment')?.value) || 2,
+      cp_sat_time_limit:    parseFloat(inp('sysCpSatTimeLimit')?.value)   || 60.0,
+    };
+    saveSystemSettings(updated);
+    showToast('System settings saved.', 'success');
+  });
 }
 
 function initAcademicMode() {
@@ -2596,6 +2688,7 @@ function initRoomManagement() {
     runtimeLabRooms = runtimeLabRooms.filter(r => r);
     saveRoomsToStorage();
     populateSCRoomDropdown();
+  populateSCBuildingDropdown();
     showToast('Rooms saved successfully.', 'success');
     try {
       await fetch(`${API_BASE}/rooms`, {
@@ -2747,6 +2840,31 @@ function populateSCRoomDropdown() {
     allRooms.map(r => `<option value="${escapeAttr(r)}">${escapeHTML(r)}</option>`).join('');
 }
 
+function populateSCBuildingDropdown() {
+  const sel = document.getElementById('scPreferredBuilding');
+  if (!sel) return;
+  // Derive unique building prefixes from runtime rooms using same logic as backend get_building()
+  const allRooms = [...runtimeLectureRooms, ...runtimeLabRooms];
+  const buildingSet = new Map();
+  allRooms.forEach(r => {
+    const name = r.trim();
+    let bld, label;
+    if (name.startsWith('GA Bldg'))  { bld = 'GA Bldg';  label = 'GA Building'; }
+    else if (name.startsWith('IT Room')) { bld = 'IT Room'; label = 'IT Room Building'; }
+    else if (name.startsWith('CL'))   { bld = 'CL';       label = 'CL Building'; }
+    else if (name.startsWith('MTC'))  { bld = 'MTC';      label = 'MTC Building'; }
+    else if (name.startsWith('NIT'))  { bld = 'NIT';      label = 'NIT Building'; }
+    else { bld = name; label = name; }
+    if (!buildingSet.has(bld)) buildingSet.set(bld, label);
+  });
+  const current = sel.value;
+  sel.innerHTML = '<option value="">- No Preference -</option>' +
+    Array.from(buildingSet.entries()).map(([bld, label]) =>
+      `<option value="${escapeAttr(bld)}">${escapeHTML(label)}</option>`
+    ).join('');
+  if (current) sel.value = current;
+}
+
 function addUnavailDateEntry(container, value = '') {
   const div = document.createElement('div');
   div.className = 'date-entry';
@@ -2817,6 +2935,7 @@ function initSoftConstraints() {
   softConstraintsCache = loadSoftConstraintsFromStorage();
   populateSCFacultyDropdown();
   populateSCRoomDropdown();
+  populateSCBuildingDropdown();
 
   document.getElementById('scLoadBtn')?.addEventListener('click', () => {
     const name = document.getElementById('scFacultySelect')?.value;

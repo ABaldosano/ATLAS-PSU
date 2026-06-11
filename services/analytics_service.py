@@ -4,7 +4,7 @@ Faculty Workload Analytics - Phase 3.
 Pure computation — no Flask dependencies.
 """
 
-from config.settings import UNITS_PER_ASSIGNMENT
+import config.settings as _cfg_ana
 from solver.constraints import (
     get_required_specs, is_exact_spec_match,
     get_room_capacity, room_exceeds_hard_max, room_capacity_penalty,
@@ -31,7 +31,7 @@ def compute_analytics(assignments: list, faculty_list: list, static_lookup: dict
     fac_subjects: dict = {f["name"]: [] for f in faculty_list}
     for a in assignments:
         if a.get("faculty"):
-            fac_loads[a["faculty"]] = fac_loads.get(a["faculty"], 0) + UNITS_PER_ASSIGNMENT
+            fac_loads[a["faculty"]] = fac_loads.get(a["faculty"], 0) + _cfg_ana.UNITS_PER_ASSIGNMENT
             fac_subjects.setdefault(a["faculty"], []).append(a)
 
     # ── Faculty utilization ───────────────────────────────────────────────────

@@ -164,6 +164,7 @@ def run_scheduling_job(
         generations   = max(1, ga_params.get("generations", 50))
         population    = max(4, ga_params.get("population", 20))
         mutation_rate = float(ga_params.get("mutation", 0.15))
+        crossover_rate = float(ga_params.get("crossover", 0.8))
 
         def ga_progress(gen, total):
             pct = 40 + int(gen / total * 50) if total else 40  # GA = 40-90%
@@ -177,6 +178,7 @@ def run_scheduling_job(
             generations=generations,
             population_size=population,
             mutation_rate=mutation_rate,
+            crossover_rate=crossover_rate,
             progress_cb=ga_progress,
             class_sizes=class_sizes,
         )

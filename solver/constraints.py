@@ -4,7 +4,24 @@ Hard constraint definitions and validation utilities.
 All schedule generation must satisfy every constraint in this module.
 """
 
-from config.settings import SPECIALIZATION_MAP, UNITS_PER_ASSIGNMENT, ROOM_CAPACITY
+from config.settings import SPECIALIZATION_MAP, ROOM_CAPACITY
+import config.settings as _settings
+
+# Runtime room capacity — overrides ROOM_CAPACITY when set via set_runtime_room_capacity()
+_runtime_room_capacity: dict = {}
+
+# UNITS_PER_ASSIGNMENT is read dynamically from config.settings so route overrides propagate
+def _get_upa():
+    return getattr(_settings, 'UNITS_PER_ASSIGNMENT', 2)
+
+# Module-level alias kept for imports elsewhere; always reads live value
+# UNITS_PER_ASSIGNMENT accessed via _settings.UNITS_PER_ASSIGNMENT below
+
+
+def set_runtime_room_capacity(capacity: dict) -> None:
+    """Replace runtime room capacity with values received from the frontend."""
+    global _runtime_room_capacity
+    _runtime_room_capacity = {k: v for k, v in capacity.items() if isinstance(v, dict)}
 
 
 # ── Qualification ─────────────────────────────────────────────────────────────
@@ -54,7 +71,7 @@ def faculty_available_at(faculty: dict, slot_str: str) -> bool:
 # ── Load ──────────────────────────────────────────────────────────────────────
 
 def faculty_load_ok(current_units: int, faculty: dict) -> bool:
-    return current_units + UNITS_PER_ASSIGNMENT <= faculty.get("absolute_max_units", 30)
+    return current_units + _settings.UNITS_PER_ASSIGNMENT <= faculty.get("absolute_max_units", 30)
 
 
 # ── Room Compatibility ────────────────────────────────────────────────────────
@@ -68,7 +85,11 @@ def room_compatible(room_name: str, class_type: str, lab_rooms: list) -> bool:
 # ── Room Capacity ─────────────────────────────────────────────────────────────
 
 def get_room_capacity(room_name: str) -> dict:
-    """Return capacity config for a room. Returns permissive defaults if not configured."""
+    """Return capacity config for a room. Runtime values take precedence over defaults."""
+    if _runtime_room_capacity:
+        cap = _runtime_room_capacity.get(room_name)
+        if cap:
+            return cap
     return ROOM_CAPACITY.get(room_name, {"recommended": 9999, "max": 9999})
 
 
@@ -154,6 +175,23 @@ def room_fits_students(room_name: str, student_count: int) -> bool:
     return not room_exceeds_hard_max(room_name, student_count)
 
 
+# ── Building helpers ──────────────────────────────────────────────────────────
+
+def get_building(room_name: str) -> str:
+    """
+    Extract the logical building group from a room name.
+    Used for per-day building affinity and section clustering.
+    Scalable: any future room name maps to itself as its own building.
+    """
+    r = room_name.strip()
+    if r.startswith("GA Bldg"):  return "GA Bldg"
+    if r.startswith("IT Room"):  return "IT Room"
+    if r.startswith("CL"):       return "CL"
+    if r.startswith("MTC"):      return "MTC"
+    if r.startswith("NIT"):      return "NIT"
+    return r  # fallback — handles future rooms gracefully
+
+
 def rank_rooms_by_capacity_fit(room_pool: list, student_count: int) -> list:
     """
     Sort rooms by best fit for the given student count.
@@ -172,7 +210,7 @@ def rank_rooms_by_capacity_fit(room_pool: list, student_count: int) -> list:
         max_cap = cap.get("max", 9999)
         over = max(0, student_count - recommended)
         # Primary: over_recommended (0 = fits); Secondary: tightest recommended >= student_count
-        gap = recommended - student_count if student_count <= recommended else 9999
+        gap = recommended - student_count if student_count <= recommended else -recommended
         return (over, gap)
 
     return sorted(eligible, key=fit_key)
@@ -240,7 +278,7 @@ def validate_schedule(assignments: list, faculty_list: list, static_lookup: dict
                     f"{student_count} students for {label}"
                 )
 
-        fac_load[a["faculty"]] = fac_load.get(a["faculty"], 0) + UNITS_PER_ASSIGNMENT
+        fac_load[a["faculty"]] = fac_load.get(a["faculty"], 0) + _settings.UNITS_PER_ASSIGNMENT
 
     # Load caps
     for f in faculty_list:

@@ -8,6 +8,7 @@ from services.schedule_service import (
     start_scheduling, get_progress,
     get_soft_constraints, set_soft_constraint,
 )
+from solver.constraints import set_runtime_room_capacity
 
 schedule_bp = Blueprint("schedule", __name__)
 
@@ -25,6 +26,34 @@ def _err(msg: str, code: int = 400):
     return jsonify({"success": False, "error": msg, "data": {}, "metrics": {}, "warnings": []}), code
 
 
+# ── /rooms — persist runtime room capacity ────────────────────────────────────
+
+@schedule_bp.route("/rooms", methods=["POST"])
+def update_rooms():
+    import config.settings as _cfg
+    data = request.get_json() or {}
+
+    if "lecture_rooms" in data:
+        new_lecture = [str(r).strip() for r in data["lecture_rooms"] if str(r).strip()]
+        _cfg.LECTURE_ROOMS[:] = new_lecture
+    if "laboratory_rooms" in data:
+        new_lab = [str(r).strip() for r in data["laboratory_rooms"] if str(r).strip()]
+        _cfg.LABORATORY_ROOMS[:] = new_lab
+    if "lecture_rooms" in data or "laboratory_rooms" in data:
+        _cfg.ALL_ROOMS[:] = _cfg.LECTURE_ROOMS + _cfg.LABORATORY_ROOMS
+
+    room_capacity = data.get("room_capacity", {})
+    if room_capacity:
+        set_runtime_room_capacity(room_capacity)
+
+    return _ok({
+        "lecture_rooms":    list(_cfg.LECTURE_ROOMS),
+        "laboratory_rooms": list(_cfg.LABORATORY_ROOMS),
+        "all_rooms":        list(_cfg.ALL_ROOMS),
+        "saved": True,
+    })
+
+
 # ── /run-ga (backward-compatible: now triggers CP-SAT + GA) ──────────────────
 
 @schedule_bp.route("/run-ga", methods=["POST"])
@@ -35,8 +64,25 @@ def run_ga():
     if not data:
         return _err("Empty payload.")
 
+    # Apply room capacity override before scheduling (if provided)
+    room_capacity = data.get("room_capacity", {})
+    if room_capacity:
+        set_runtime_room_capacity(room_capacity)
+
     # Cache faculty list for analytics re-compute endpoint
     _app.faculty_runtime_list = data.get("faculty", [])
+
+    # Apply runtime engine settings if provided
+    units_per_assignment = data.get("units_per_assignment")
+    cp_sat_time_limit    = data.get("cp_sat_time_limit")
+    if units_per_assignment:
+        import config.settings as _cfg
+        _cfg.UNITS_PER_ASSIGNMENT = int(units_per_assignment)
+        import solver.constraints as _sc
+        _sc.UNITS_PER_ASSIGNMENT = int(units_per_assignment)
+    if cp_sat_time_limit:
+        import config.settings as _cfg2
+        _cfg2.CP_SAT_TIME_LIMIT_SECONDS = float(cp_sat_time_limit)
 
     result = start_scheduling(
         faculty_raw=data.get("faculty", []),

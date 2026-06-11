@@ -4,7 +4,8 @@ Soft-constraint scoring for GA preference optimizer.
 Weights are configurable via config/settings.py GA_WEIGHTS.
 """
 
-from config.settings import GA_WEIGHTS, UNITS_PER_ASSIGNMENT
+from config.settings import GA_WEIGHTS
+import config.settings as _cfg_obj
 from solver.constraints import room_capacity_score
 
 
@@ -69,6 +70,12 @@ def score_preference(assignment: dict, soft_constraints: dict,
         if sc.get("maternity_leave"):
             score += w["maternity_leave_penalty"]
 
+        # Date-based unavailability / leave ranges (soft penalty — discourages
+        # but does not hard-block, since slots are recurring weekly patterns
+        # without concrete calendar dates).
+        if sc.get("unavailable_dates") or sc.get("leave_dates"):
+            score += w.get("leave_penalty", -10.0)
+
     # Room capacity score (always applied when room and student count are known)
     if room and room != "Unassigned" and class_sizes:
         section_key = assignment.get("section", "")
@@ -108,7 +115,7 @@ def schedule_fitness(assignments: list, faculty_list: list, soft_constraints: di
     loads = {f["name"]: 0 for f in faculty_list}
     for a in assignments:
         if a.get("faculty") in loads:
-            loads[a["faculty"]] += UNITS_PER_ASSIGNMENT
+            loads[a["faculty"]] += _cfg_obj.UNITS_PER_ASSIGNMENT
 
     values = list(loads.values())
     variance = 0.0
@@ -127,7 +134,47 @@ def schedule_fitness(assignments: list, faculty_list: list, soft_constraints: di
         variance_penalty = 0.0
         under_penalty = 0.0
 
-    return preference_score + spec_score - variance_penalty - under_penalty
+    # ── Building affinity: reward staying in same building per day ────────────
+    from solver.constraints import get_building
+    from collections import Counter
+
+    fac_day_buildings:  dict = {}  # (fac, day) → Counter of buildings
+    sec_day_buildings:  dict = {}  # (sec, day) → Counter of buildings
+
+    for a in assignments:
+        slot = a.get("slot", "")
+        room = a.get("room", "")
+        if not slot or not room or room == "Unassigned":
+            continue
+        day = slot.split(":")[0].strip()
+        bld = get_building(room)
+        fac = a.get("faculty", "")
+        sec = a.get("section", "")
+        if fac:
+            fac_day_buildings.setdefault((fac, day), Counter())[bld] += 1
+        if sec:
+            sec_day_buildings.setdefault((sec, day), Counter())[bld] += 1
+
+    affinity_score = 0.0
+    bld_bonus   = w.get("building_affinity_bonus",   4.0)
+    bld_penalty = w.get("building_affinity_penalty", -3.0)
+    for counter in fac_day_buildings.values():
+        n_buildings = len(counter)
+        if n_buildings == 1:
+            affinity_score += bld_bonus * 2           # fully consolidated
+        else:
+            affinity_score += bld_penalty * (n_buildings - 1)
+
+    sec_bonus   = w.get("section_cluster_bonus",    3.0)
+    sec_penalty = w.get("section_cluster_penalty", -2.5)
+    for counter in sec_day_buildings.values():
+        n_buildings = len(counter)
+        if n_buildings == 1:
+            affinity_score += sec_bonus * 2
+        else:
+            affinity_score += sec_penalty * (n_buildings - 1)
+
+    return preference_score + spec_score - variance_penalty - under_penalty + affinity_score
 
 
 def compute_satisfaction_metrics(assignments: list, faculty_list: list,

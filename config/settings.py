@@ -135,12 +135,18 @@ GA_WEIGHTS = {
     "preferred_floor_match":    2.0,
     "restricted_day_penalty": -12.0,
     "maternity_leave_penalty": -20.0,
+    "leave_penalty": -10.0,
     "exact_spec_match":         8.0,
     "load_variance_weight":     1.5,
     "underload_gap_weight":     3.0,
     # Room capacity weights (integrated into fitness)
     "capacity_fit_bonus":       2.0,   # per student under/at recommended
     "capacity_over_penalty":    3.0,   # per student over recommended (default)
+    # Building affinity weights
+    "building_affinity_bonus":  4.0,   # reward faculty staying in same building per day
+    "building_affinity_penalty":-3.0,  # penalise each extra building a faculty uses per day
+    "section_cluster_bonus":    3.0,   # reward section staying in same building per day
+    "section_cluster_penalty": -2.5,   # penalise each extra building a section uses per day
 }
 
 # ── Solver Config ─────────────────────────────────────────────────────────────

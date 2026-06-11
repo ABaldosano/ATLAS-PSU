@@ -179,25 +179,10 @@
           <button id="runGA" class="btn btn-full" aria-label="Run optimization">
             Run Optimization
           </button>
-          
-          <details class="advanced-settings">
-            <summary>GA Parameters</summary>
-            <div class="settings-body">
-              <label for="populationSize">Population Size 
-                <input type="number" id="populationSize" value="50" min="5" max="200">
-              </label>
-              <label for="numGenerations">Generations 
-                <input type="number" id="numGenerations" value="100" min="10" max="1000">
-              </label>
-              <label for="mutationRate">Mutation Rate 
-                <input type="number" id="mutationRate" value="0.09" step="0.01" min="0" max="1">
-              </label>
-              <label for="crossoverRate">Crossover Rate 
-                <input type="number" id="crossoverRate" value="0.95" step="0.1" min="0" max="1">
-              </label>
-              <p class="ched-note">&#9432; Load limits enforced: standard max <strong>24 units</strong>, overload cap <strong>30 units</strong>, as per CHED guidelines (CMO No. 40, s. 2006).</p>
-            </div>
-          </details>
+
+          <button class="btn btn-outline btn-full btn-advanced-settings" id="goToAdvancedSettings" onclick="switchPanel(4); setTimeout(()=>{ document.getElementById('engineSettingsCard').scrollIntoView({behavior:'smooth'}); }, 100);">
+            ⚙ Advanced Settings
+          </button>
         </div>
 
 
@@ -380,6 +365,7 @@
                 <th>Name</th>
                 <th>Specialization</th>
                 <th>Max Units</th>
+                <th title="Added to Max Units to get the absolute hard cap (absolute_max_units = Max + Buffer)">Overload Buffer</th>
                 <th class="avail-th">
                   <span class="avail-th-label">Availability</span>
                   <div class="avail-select-all-row">
@@ -430,6 +416,63 @@
           <h2>Settings</h2>
           <p>Room management, class sizes, professor preferences, and system configuration.</p>
         </div>
+
+        <!-- ── SYSTEM SETTINGS ── -->
+        <h3 class="section-heading">System Settings</h3>
+        <div class="academic-mode-card" id="engineSettingsCard">
+          <div class="academic-mode-header-sub" style="margin-bottom:16px;font-size:0.85rem;color:var(--text-secondary);">
+            Core engine parameters. Changes apply on the next optimization run.
+          </div>
+          <div class="engine-settings-row">
+            <div class="engine-settings-col">
+              <div class="engine-settings-section-label">CP-SAT &amp; Engine</div>
+              <div class="modal-form-group">
+                <label for="sysMaxUnits">Standard Max Units</label>
+                <input type="number" id="sysMaxUnits" min="1" max="60" value="24" placeholder="24">
+                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">Used for chart colors and overload warnings.</p>
+              </div>
+              <div class="modal-form-group">
+                <label for="sysUnitsPerAssignment">Units Per Assignment</label>
+                <input type="number" id="sysUnitsPerAssignment" min="1" max="6" value="2" placeholder="2">
+                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">How many units each scheduled slot counts as.</p>
+              </div>
+              <div class="modal-form-group">
+                <label for="sysCpSatTimeLimit">CP-SAT Time Limit (seconds)</label>
+                <input type="number" id="sysCpSatTimeLimit" min="5" max="600" step="5" value="60" placeholder="60">
+                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">Max solver time before falling back to backtracking.</p>
+              </div>
+            </div>
+            <div class="engine-settings-divider"></div>
+            <div class="engine-settings-col">
+              <div class="engine-settings-section-label">Genetic Algorithm</div>
+              <div class="modal-form-group">
+                <label for="populationSize">Population Size</label>
+                <input type="number" id="populationSize" value="50" min="5" max="200">
+                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">Candidate schedules per generation.</p>
+              </div>
+              <div class="modal-form-group">
+                <label for="numGenerations">Generations</label>
+                <input type="number" id="numGenerations" value="100" min="10" max="1000">
+                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">How many GA iterations to run.</p>
+              </div>
+              <div class="modal-form-group">
+                <label for="mutationRate">Mutation Rate</label>
+                <input type="number" id="mutationRate" value="0.09" step="0.01" min="0" max="1">
+                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">Probability of schedule mutation.</p>
+              </div>
+              <div class="modal-form-group">
+                <label for="crossoverRate">Crossover Rate</label>
+                <input type="number" id="crossoverRate" value="0.95" step="0.1" min="0" max="1">
+                <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">Rate of combining parent schedules.</p>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:18px;">
+            <button class="btn" id="saveSystemSettings">Save System Settings</button>
+          </div>
+        </div>
+
+        <div class="section-divider"></div>
 
         <!-- ── ACADEMIC YEAR & SEMESTER MODE ── -->
         <h3 class="section-heading">Academic Year &amp; Semester</h3>
@@ -563,11 +606,6 @@
               <label for="scPreferredBuilding">Building Preference</label>
               <select id="scPreferredBuilding">
                 <option value="">- No Preference -</option>
-                <option value="CL">CL Building</option>
-                <option value="IT Room">IT Room Building</option>
-                <option value="GA Bldg">GA Building</option>
-                <option value="MTC">MTC Building</option>
-                <option value="NIT">NIT Building</option>
               </select>
             </div>
             <div class="modal-form-group">

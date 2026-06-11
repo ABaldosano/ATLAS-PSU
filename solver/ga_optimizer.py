@@ -18,12 +18,14 @@ import random
 import time
 from typing import Callable, Optional
 
-from config.settings import UNITS_PER_ASSIGNMENT
+import config.settings as _cfg_ga
 from solver.constraints import (
     faculty_available_at, slot_day,
-    room_exceeds_hard_max, rank_rooms_by_capacity_fit,
+    room_exceeds_hard_max, rank_rooms_by_capacity_fit, get_building,
+    validate_schedule,
 )
 from solver.objective_functions import schedule_fitness
+from config.settings import LABORATORY_ROOMS
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -34,6 +36,40 @@ def _build_fac_slot_map(assignments: list) -> dict:
     for a in assignments:
         fsm.setdefault(a["faculty"], set()).add(a["slot"])
     return fsm
+
+
+def _build_affinity_maps(assignments: list) -> tuple[dict, dict]:
+    """
+    Returns:
+        fac_day_building  : {(fac_name, day) → dominant building}
+        section_day_building: {(sec_key, day) → dominant building}
+
+    Dominant building = most-used building for that faculty/section on that day.
+    Used to guide _mutate_room toward building continuity.
+    """
+    from collections import Counter
+    fac_day_counts:  dict = {}  # (fac, day) → Counter of buildings
+    sec_day_counts:  dict = {}  # (sec, day) → Counter of buildings
+
+    for a in assignments:
+        slot = a.get("slot", "")
+        room = a.get("room", "")
+        if not slot or not room or room == "Unassigned":
+            continue
+        day = slot.split(":")[0].strip()
+        bld = get_building(room)
+
+        fac = a.get("faculty", "")
+        if fac:
+            fac_day_counts.setdefault((fac, day), Counter())[bld] += 1
+
+        sec = a.get("section", "")
+        if sec:
+            sec_day_counts.setdefault((sec, day), Counter())[bld] += 1
+
+    fac_day_building  = {k: v.most_common(1)[0][0] for k, v in fac_day_counts.items()}
+    sec_day_building  = {k: v.most_common(1)[0][0] for k, v in sec_day_counts.items()}
+    return fac_day_building, sec_day_building
 
 
 def _slot_to_12h(slot_str: str) -> str:
@@ -148,19 +184,25 @@ def _mutate_slot_shift(assignments: list, faculty_list: list, soft_constraints: 
 def _mutate_room(assignments: list, soft_constraints: dict,
                  class_sizes: dict = None) -> list:
     """
-    Reassign room for a single assignment, respecting room type compatibility,
-    capacity hard maximum, and avoiding room-slot conflicts.
-    Prefers rooms with best capacity fit for the section's student count.
+    Reassign room for a single assignment, respecting:
+      - Room type compatibility (LAB → lab rooms only)
+      - Capacity hard max (fall back to best available for labs — batch-split)
+      - Room-slot conflicts
+      - Per-day building affinity (faculty and section)
+      - Explicit faculty room/building preferences
     """
     from config.settings import LABORATORY_ROOMS, ALL_ROOMS
     result = copy.deepcopy(assignments)
+
+    # Build affinity maps from current schedule
+    fac_day_building, sec_day_building = _build_affinity_maps(result)
 
     room_slot_used = {f"{a['room']}|{a['slot']}" for a in result if a["room"] != "Unassigned"}
     idx = random.randrange(len(result))
     a = result[idx]
 
     sc = soft_constraints.get(a["faculty"], {})
-    preferred_room = sc.get("preferred_room")
+    preferred_room     = sc.get("preferred_room")
     preferred_building = sc.get("preferred_building")
 
     pool = LABORATORY_ROOMS if a["class_type"] == "LAB" else ALL_ROOMS
@@ -169,40 +211,54 @@ def _mutate_room(assignments: list, soft_constraints: dict,
     if not free_pool:
         return result
 
-    # Get student count for capacity-aware ranking
+    # Student count
     student_count = a.get("student_count", 0)
     if student_count <= 0 and class_sizes:
-        section_key = a.get("section", "")
-        size_entry = class_sizes.get(section_key)
+        size_entry = class_sizes.get(a.get("section", ""))
         student_count = size_entry.get("size", 0) if isinstance(size_entry, dict) else 0
 
+    # Filter by capacity; for labs, fall back to best-available (batch-split)
     if student_count > 0:
-        # Exclude rooms exceeding hard max
         cap_ok = [r for r in free_pool if not room_exceeds_hard_max(r, student_count)]
-        if cap_ok:
-            free_pool = cap_ok
-        # Rank by capacity fit
-        free_pool = rank_rooms_by_capacity_fit(free_pool, student_count)
-    else:
-        # Rank by preference only
-        def room_score(r: str) -> int:
-            s = 0
-            if preferred_room and r == preferred_room:
-                s += 10
-            if preferred_building and preferred_building.lower() in r.lower():
-                s += 5
-            return s
-        free_pool.sort(key=room_score, reverse=True)
+        free_pool = cap_ok if cap_ok else free_pool
 
-    # Honor preferred room if it's at the front of capacity-ranked list
-    if preferred_room and preferred_room in free_pool:
-        # Only override capacity ranking if preferred room also fits well
-        from solver.constraints import get_room_capacity, room_capacity_score
-        pref_score = room_capacity_score(preferred_room, student_count) if student_count > 0 else 0
-        best_score = room_capacity_score(free_pool[0], student_count) if student_count > 0 else 0
-        if pref_score >= best_score - 1.0:  # preferred room is close enough in capacity fit
-            free_pool = [preferred_room] + [r for r in free_pool if r != preferred_room]
+    # Composite sort: capacity fit → building affinity → preference → usage
+    slot = a.get("slot", "")
+    day  = slot.split(":")[0].strip() if slot else ""
+    fac_name = a.get("faculty", "")
+    sec_key  = a.get("section", "")
 
+    def _room_sort_key(r: str):
+        from solver.constraints import get_room_capacity
+        cap = get_room_capacity(r)
+        rec = cap.get("recommended", 9999)
+        if student_count > 0:
+            over = max(0, student_count - rec)
+            gap  = (rec - student_count) if student_count <= rec else -rec
+        else:
+            over, gap = 0, 0
+
+        bld = get_building(r)
+
+        # Building affinity (faculty + section)
+        fac_bld = fac_day_building.get((fac_name, day))
+        sec_bld = sec_day_building.get((sec_key, day))
+        affinity = 1  # neutral
+        if fac_bld:
+            affinity = 0 if fac_bld == bld else 2
+        if sec_bld:
+            affinity = min(affinity, 0) if sec_bld == bld else max(affinity, 2)
+
+        # Soft preference overrides
+        pref_match = 0
+        if preferred_room and r == preferred_room:
+            pref_match = -2
+        elif preferred_building and preferred_building.lower() in r.lower():
+            pref_match = -1
+
+        return (over, affinity + pref_match, gap)
+
+    free_pool.sort(key=_room_sort_key)
     new_room = free_pool[0]
 
     room_slot_used.discard(current_key)
@@ -213,6 +269,30 @@ def _mutate_room(assignments: list, soft_constraints: dict,
 
 # ── GA main loop ──────────────────────────────────────────────────────────────
 
+def _crossover(parent_a: list, parent_b: list, faculty_list: list, static_lookup: dict,
+                class_sizes: dict, rate: float) -> list:
+    """
+    Uniform crossover between two valid schedules (slot/room only — faculty
+    and subject per index are identical across the population by design).
+    The result is validated against all hard constraints; if invalid,
+    falls back to parent_a unchanged.
+    """
+    if random.random() > rate or len(parent_a) != len(parent_b):
+        return copy.deepcopy(parent_a)
+
+    child = copy.deepcopy(parent_a)
+    for i in range(len(child)):
+        if random.random() < 0.5:
+            child[i]["slot"] = parent_b[i]["slot"]
+            child[i]["slot_display"] = parent_b[i]["slot_display"]
+            child[i]["room"] = parent_b[i]["room"]
+
+    violations = validate_schedule(child, faculty_list, static_lookup, LABORATORY_ROOMS, class_sizes)
+    if violations:
+        return copy.deepcopy(parent_a)
+    return child
+
+
 def optimize(
     base_schedule: list,
     faculty_list: list,
@@ -221,6 +301,7 @@ def optimize(
     generations: int = 50,
     population_size: int = 20,
     mutation_rate: float = 0.15,
+    crossover_rate: float = 0.8,
     progress_cb: Optional[Callable] = None,
     time_limit: float = 120.0,
     class_sizes: dict = None,
@@ -287,7 +368,7 @@ def optimize(
         while len(new_pop) < population_size:
             t1 = random.choice(scored[:max(2, population_size // 2)])[0]
             t2 = random.choice(scored[:max(2, population_size // 2)])[0]
-            child = copy.deepcopy(t1 if fitness(t1) >= fitness(t2) else t2)
+            child = _crossover(t1, t2, faculty_list, static_lookup, class_sizes, crossover_rate)
 
             if random.random() < mutation_rate:
                 op = random.choice([

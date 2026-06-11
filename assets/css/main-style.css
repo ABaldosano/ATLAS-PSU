@@ -2404,6 +2404,20 @@ body.page-login {
   transform: translateY(-1px);
 }
 
+.btn-advanced-settings {
+  margin-top: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+  justify-content: center;
+}
+.btn-advanced-settings:hover {
+  color: var(--clr-primary-700);
+  border-color: var(--clr-primary-400);
+  background: var(--clr-primary-50);
+}
+
 /* Hero badge */
 .badge {
   display: inline-flex;
@@ -3222,6 +3236,56 @@ body.page-login {
   max-width: 600px;
   margin-bottom: 28px;
   box-shadow: var(--shadow-sm);
+}
+
+#engineSettingsCard {
+  max-width: 100%;
+}
+
+#engineSettingsCard .engine-settings-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+}
+
+#engineSettingsCard .engine-settings-col {
+  flex: 1;
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+
+#engineSettingsCard .engine-settings-col:first-child {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto 1fr;
+  padding-right: 28px;
+}
+
+#engineSettingsCard .engine-settings-col:last-child {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: auto 1fr;
+  padding-left: 28px;
+}
+
+#engineSettingsCard .engine-settings-section-label {
+  grid-column: 1 / -1;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0;
+}
+
+#engineSettingsCard .engine-settings-divider {
+  width: 1px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
+#engineSettingsCard .modal-form-group {
+  margin: 0;
 }
 
 .academic-mode-header {
