@@ -180,7 +180,7 @@
             Run Optimization
           </button>
 
-          <button class="btn btn-outline btn-full btn-advanced-settings" id="goToAdvancedSettings" onclick="switchPanel(4); setTimeout(()=>{ document.getElementById('engineSettingsCard').scrollIntoView({behavior:'smooth'}); }, 100);">
+          <button class="btn btn-outline btn-full btn-advanced-settings" id="goToAdvancedSettings" onclick="switchPanel(4); const p=document.querySelectorAll('.panel')[4]; if(p) p.scrollTop=0;">
             ⚙ Advanced Settings
           </button>
         </div>
