@@ -1,8 +1,3 @@
-"""
-ATLAS PSU - app.py
-Bootstrap: Flask init + route registration only.
-All scheduling logic lives in /solver, /services, /routes.
-"""
 
 import copy
 from flask import Flask, jsonify, request
