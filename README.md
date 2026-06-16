@@ -3,9 +3,9 @@
 
 # ATLAS PSU
 
-**Automated Teaching Load Assignment System · Palawan State University · Information Technology Department**
+**Automated Teaching Load Assignment System · Palawan State University · College of Sciences · Information Technology Department**
 
-*Hybrid CP-SAT + Genetic Algorithm scheduling engine. Assigns faculty workloads across all sections with zero hard-constraint violations — no templates, no manual scheduling.*
+*Hybrid CP-SAT + Genetic Algorithm scheduling engine. Assigns faculty workloads across all sections with zero hard-constraint violations - no templates, no manual scheduling.*
 
 [![Status](https://img.shields.io/badge/status-active%20development-c9a96e?style=flat-square)](#)
 [![Built With](https://img.shields.io/badge/built%20with-Python%20%7C%20Flask%20%7C%20Vanilla%20JS-4a90d9?style=flat-square)](#technologies-used)
@@ -18,13 +18,33 @@
 
 ## What Is This?
 
-ATLAS PSU is an institutional-grade **Faculty Workload Assignment System** built for Department Chairpersons at Palawan State University's Information Technology Department. It replaces manual scheduling with a two-phase optimization engine: a CP-SAT constraint solver handles hard-constraint validity in Phase 1, and a Genetic Algorithm optimizes faculty preferences in Phase 2. A third analytics phase computes workload fairness metrics and specialization match rates after each run.
+ATLAS PSU is an institutional-grade **Faculty Workload Assignment System** built for Department Chairpersons at the College of Sciences, Palawan State University. It replaces manual scheduling with a two-phase optimization engine: a CP-SAT constraint solver handles hard-constraint validity in Phase 1, and a Genetic Algorithm optimizes faculty preferences in Phase 2. A third analytics phase computes workload fairness metrics and specialization match rates after each run.
+
+Unlike the existing CRUD-based schedule plotting tool used by the College of Sciences, which only allows chairpersons to manually input and display schedules for faculty to view, ATLAS PSU actively generates optimized faculty-to-subject assignments that satisfy specialization, availability, and institutional load constraints. Chairpersons retain full decision authority: after the system produces its recommendations, assignments can be reviewed through the analytics dashboard, manually edited at the individual assignment level, and finalized before export.
+
+This system was developed as a thesis proposal for Systems Integration and Architecture 1, BS Information Technology, 2nd Year, Palawan State University.
+
+---
+
+## Background and Problem
+
+At the College of Sciences of Palawan State University, faculty teaching loads are assigned by department chairpersons at the beginning of each semester. The departments covered are Information Technology, Computer Science, Medical Biology, Marine Biology, and Environmental Science.
+
+Structured interviews conducted with department chairpersons and program heads on June 8, 2026 confirmed the following:
+
+- The existing institutional system is a CRUD-based plotting tool. Chairpersons input schedules manually for faculty to view. It does not perform automated assignment, constraint checking, or conflict resolution.
+- The most time-consuming task in the current process is matching each faculty member's academic specialization to appropriate subjects.
+- Faculty soft constraints such as time preferences, room preferences, subject preferences, and specific dates of unavailability are not handled by any existing tool.
+- Other concerns include class size management, schedule splitting, and block-based scheduling across year levels.
+- Workload finalization can take several weeks when done manually.
+
+ATLAS PSU addresses all of the above directly.
 
 ---
 
 ## How the Engine Works
 
-**Phase 1 — CP-SAT Solver** (`solver/cp_sat_solver.py`)
+### Phase 1 - CP-SAT Solver (`solver/cp_sat_solver.py`)
 
 Uses Google OR-Tools CP-SAT to generate a conflict-free base schedule. If OR-Tools is not installed, the solver falls back to a deterministic greedy backtracking algorithm with the same hard-constraint guarantees.
 
@@ -37,19 +57,30 @@ Hard constraints enforced:
 - Room type compatibility (LAB subjects go to laboratory rooms only)
 - Full section coverage across all year levels and blocks
 
-**Phase 2 — Genetic Algorithm Optimizer** (`solver/ga_optimizer.py`)
+### Phase 2 - Genetic Algorithm Optimizer (`solver/ga_optimizer.py`)
 
 Takes the valid CP-SAT schedule as input and improves slot and room assignments based on faculty soft preferences. It never generates schedules from scratch and never violates hard constraints. Faculty assignments from Phase 1 are authoritative.
 
-**Phase 3 — Analytics** (`services/analytics_service.py`)
+Soft constraints optimized:
+- Preferred time periods (e.g., afternoon over morning)
+- Preferred rooms and buildings
+- Restricted days and unavailable dates
+- Leave dates and maternity leave flags
+
+### Phase 3 - Analytics (`services/analytics_service.py`)
 
 Computes faculty utilization, Jain's Fairness Index, load standard deviation, and specialization match rates. Results feed the dashboard and the fairness report section.
+
+### Phase 4 - Chairperson Review and Manual Edit
+
+After the system produces optimized recommendations, the chairperson can review individual assignments through the timetable grid and analytics panels. Any assignment can be manually edited before the schedule is finalized and exported. The system does not automate the final decision - it informs it.
 
 ---
 
 ## Features
 
 - Two-phase optimization: CP-SAT for correctness, GA for preference satisfaction
+- Post-optimization manual editing of individual assignments
 - Configurable GA parameters: population size, generations, mutation rate, crossover rate
 - Soft constraints per faculty: preferred periods, preferred rooms, preferred buildings, restricted days, unavailable dates, leave dates, and maternity leave flags
 - Faculty workload balancing with per-faculty load caps and overload detection
@@ -58,12 +89,36 @@ Computes faculty utilization, Jain's Fairness Index, load standard deviation, an
 - Real-time progress polling during optimization runs
 - Timetable grid view by day and time slot
 - Workload fairness report with Jain's Index, standard deviation, and per-faculty match accuracy
+- Specialization Match Report showing alignment between faculty qualifications and assigned subjects
 - Academic period / semester context filter (results filter by active semester)
 - Faculty designation support (dean, chairperson, coordinator)
 - Research hours reservation per faculty member
 - Class size configuration per section (IT1B1 through IT4B3)
 - CSV and print-ready PDF export
 - Editable rooms, class sizes, and soft constraints synced to the backend at runtime
+- Login and department selection with authenticated session management
+
+---
+
+## System Architecture
+
+The system is organized around five functional processes derived from the Data Flow Diagram:
+
+**P1 - Authentication:** Verifies login credentials and establishes an authenticated session.
+
+**P2 - Configuration:** Accepts faculty profiles, subjects, rooms, class sizes, and soft constraints from the chairperson. Stored in the Config Store (D1).
+
+**P3 - Schedule Optimization:** The core engine. Retrieves config data, runs the two-phase solver, and writes results to the Schedule Store (D2). Broken down into six sub-processes:
+- P3.1 validates faculty list and GA parameters
+- P3.2 expands subjects into sections based on class sizes and semester filter
+- P3.3 runs CP-SAT to produce a hard-constraint-valid base schedule
+- P3.4 runs GA to optimize slot and room assignments against soft preferences (D3 Soft Constraint Store)
+- P3.5 computes analytics from the best GA output
+- P3.6 reports live progress (phase and percentage) back to the chairperson
+
+**P4 - Analytics:** Reads from D2 and generates workload analytics and fairness reports for the chairperson.
+
+**P5 - Export:** Retrieves finalized schedule data from D2 and produces CSV and PDF output files.
 
 ---
 
@@ -99,7 +154,7 @@ solver/
   objective_functions.py      Fitness scoring and satisfaction metrics used by the GA
 
 services/
-  schedule_service.py         Orchestrates CP-SAT → GA → Analytics; thread-safe progress store
+  schedule_service.py         Orchestrates CP-SAT -> GA -> Analytics; thread-safe progress store
   analytics_service.py        Phase 3: utilization, Jain's Index, std deviation, match rates
 
 routes/
@@ -128,6 +183,21 @@ index.html                    Entry point (redirects to login or dashboard)
 
 ---
 
+## Configuration
+
+Key constants in `config/settings.py`:
+
+| Constant | Default | Description |
+|---|---|---|
+| `DAYS` | Mon-Sat | Available scheduling days |
+| `HOURS` | 5 blocks per day | 07:00 to 09:00 through 17:00 to 19:00 |
+| `TIME_SLOTS` | 30 total | Cartesian product of days x hours |
+| `UNITS_PER_ASSIGNMENT` | 2 | Teaching units counted per assigned slot |
+| `CP_SAT_TIME_LIMIT_SECONDS` | 60.0 | OR-Tools solver time limit |
+| `GA_WEIGHTS` | See settings.py | Soft preference scoring weights for the GA |
+
+---
+
 ## Installation
 
 ```bash
@@ -143,29 +213,14 @@ Open `http://localhost:5000` in your browser.
 - `ortools>=9.7.2996`
 - `Werkzeug==3.1.7`
 
-> OR-Tools is strongly recommended. If unavailable, the built-in greedy backtracking solver runs as a fallback with the same hard-constraint guarantees but slower performance on large inputs.
-
----
-
-## Configuration
-
-Key constants in `config/settings.py`:
-
-| Constant | Default | Description |
-|---|---|---|
-| `DAYS` | Mon-Sat | Available scheduling days |
-| `HOURS` | 5 blocks per day | 07:00-09:00 through 17:00-19:00 |
-| `TIME_SLOTS` | 30 total | Cartesian product of days x hours |
-| `UNITS_PER_ASSIGNMENT` | 2 | Teaching units counted per assigned slot |
-| `CP_SAT_TIME_LIMIT_SECONDS` | 60.0 | OR-Tools solver time limit |
-| `GA_WEIGHTS` | See settings.py | Soft preference scoring weights for the GA |
+OR-Tools is strongly recommended. If unavailable, the built-in greedy backtracking solver runs as a fallback with the same hard-constraint guarantees but slower performance on large inputs.
 
 ---
 
 ## Author
 
 **Arthur V. Baldosano Jr.**
-Palawan State University, College of Sciences — Information Technology Department
+Palawan State University, College of Sciences - Information Technology Department
 PSU-SITE President · Full-Stack Developer · Puerto Princesa, Palawan
 
 ---
